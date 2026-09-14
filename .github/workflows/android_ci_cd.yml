@@ -1,0 +1,232 @@
+name: Alnoor Islamic CI/CD Pipeline
+
+on:
+  push:
+    branches: [ main, master ]
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      version_name:
+        description: 'Release Version Name (e.g. 1.1.0)'
+        required: false
+        default: '1.1.0'
+      min_supported_version:
+        description: 'Minimum Supported Version Code (to force older versions to update)'
+        required: false
+        default: '1'
+      force_update:
+        description: 'Enforce Mandatory Forced Update on all devices'
+        type: boolean
+        required: true
+        default: true
+      release_notes:
+        description: 'Release Notes / What is New'
+        required: false
+        default: 'Automated CI/CD build with latest cloud synchronization and login popup posters.'
+
+jobs:
+  build-and-deploy:
+    name: Build APK & Deploy to Firebase Cloud
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+
+    steps:
+      - name: Checkout Source Code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Java JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Cache Gradle packages
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties') }}
+          restore-keys: |
+            ${{ runner.os }}-gradle-
+
+      - name: Grant execute permission for gradlew
+        run: chmod +x ./gradlew || true
+
+      - name: Decode Keystore (if provided)
+        if: env.KEYSTORE_BASE64 != ''
+        env:
+          KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
+        run: |
+          echo "$KEYSTORE_BASE64" | base64 --decode > my-upload-key.jks
+
+      - name: Build Android Release APK
+        env:
+          KEYSTORE_PATH: ${{ github.workspace }}/my-upload-key.jks
+          STORE_PASSWORD: ${{ secrets.STORE_PASSWORD || 'android' }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD || 'android' }}
+        run: |
+          if [ -f "./gradlew" ]; then
+            ./gradlew assembleRelease --stacktrace || ./gradlew assembleDebug --stacktrace
+          else
+            gradle assembleRelease --stacktrace || gradle assembleDebug --stacktrace
+          fi
+
+      - name: Locate Built APK File
+        id: find_apk
+        run: |
+          APK_PATH=$(find app/build/outputs/apk -name "*.apk" | head -n 1)
+          if [ -z "$APK_PATH" ]; then
+            echo "Error: APK file not found!"
+            exit 1
+          fi
+          echo "Found APK at: $APK_PATH"
+          echo "apk_path=$APK_PATH" >> $GITHUB_OUTPUT
+          
+          # Extract file size in MB
+          FILE_SIZE_BYTES=$(wc -c < "$APK_PATH")
+          FILE_SIZE_MB=$(echo "scale=1; $FILE_SIZE_BYTES / 1048576" | bc)
+          echo "apk_size=${FILE_SIZE_MB} MB" >> $GITHUB_OUTPUT
+
+      - name: Generate Build Version Code
+        id: version_calc
+        run: |
+          BUILD_NUM=${{ github.run_number }}
+          VERSION_NAME="${{ github.event.inputs.version_name || '1.1.0' }}"
+          echo "version_code=$BUILD_NUM" >> $GITHUB_OUTPUT
+          echo "version_name=$VERSION_NAME" >> $GITHUB_OUTPUT
+
+      # -------------------------------------------------------------
+      # Automated Cloud Storage Cleanup (Delete Old APKs to Save Storage)
+      # -------------------------------------------------------------
+      - name: Clean Up Old Cloud Releases & Assets
+        uses: actions/github-script@v7
+        with:
+          script: |
+            try {
+              const releases = await github.rest.repos.listReleases({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                per_page: 20
+              });
+              
+              // Keep only the latest release and delete older release APK assets to conserve cloud storage
+              if (releases.data && releases.data.length > 2) {
+                console.log(`Found ${releases.data.length} releases. Cleaning up old APK release artifacts to save storage...`);
+                for (let i = 2; i < releases.data.length; i++) {
+                  const oldRelease = releases.data[i];
+                  for (const asset of oldRelease.assets) {
+                    if (asset.name.endsWith('.apk')) {
+                      console.log(`Deleting old APK asset: ${asset.name} (ID: ${asset.id}) from Release ${oldRelease.tag_name}`);
+                      await github.rest.repos.deleteReleaseAsset({
+                        owner: context.repo.owner,
+                        repo: context.repo.repo,
+                        asset_id: asset.id
+                      });
+                    }
+                  }
+                }
+              }
+            } catch (err) {
+              console.log('Cleanup step skipped or encountered non-fatal error:', err.message);
+            }
+
+      # -------------------------------------------------------------
+      # Create Latest Cloud Release with Direct APK Download
+      # -------------------------------------------------------------
+      - name: Publish Latest Release APK
+        id: create_release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ steps.version_calc.outputs.version_name }}-b${{ steps.version_calc.outputs.version_code }}
+          name: Alnoor Islamic App v${{ steps.version_calc.outputs.version_name }} (Build ${{ steps.version_calc.outputs.version_code }})
+          body: |
+            ## Alnoor Islamic App Release v${{ steps.version_calc.outputs.version_name }}
+            
+            ${{ github.event.inputs.release_notes || 'Automated CI/CD build with live cloud synchronization and login popup posters.' }}
+            
+            - **Build Number**: ${{ steps.version_calc.outputs.version_code }}
+            - **Package Size**: ${{ steps.find_apk.outputs.apk_size }}
+            - **Timestamp**: ${{ github.event.head_commit.timestamp || 'Latest' }}
+          files: ${{ steps.find_apk.outputs.apk_path }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      # -------------------------------------------------------------
+      # Deploy to Firebase App Distribution (Optional if credentials configured)
+      # -------------------------------------------------------------
+      - name: Deploy to Firebase App Distribution
+        if: env.FIREBASE_APP_ID != '' && env.FIREBASE_CREDENTIALS != ''
+        uses: wzieba/Firebase-Distribution-Github-Action@v1
+        with:
+          appId: ${{ secrets.FIREBASE_APP_ID }}
+          serviceCredentialsFileContent: ${{ secrets.FIREBASE_CREDENTIALS }}
+          groups: testers,community
+          file: ${{ steps.find_apk.outputs.apk_path }}
+          releaseNotes: ${{ github.event.inputs.release_notes || 'New automated release of Alnoor Islamic portal' }}
+        env:
+          FIREBASE_APP_ID: ${{ secrets.FIREBASE_APP_ID }}
+          FIREBASE_CREDENTIALS: ${{ secrets.FIREBASE_CREDENTIALS }}
+
+      # -------------------------------------------------------------
+      # Update Firestore Cloud App Version Document & Trigger Forced Update
+      # -------------------------------------------------------------
+      - name: Update Cloud App Version in Firebase Firestore
+        run: |
+          APK_DOWNLOAD_URL="https://github.com/${{ github.repository }}/releases/latest/download/app-release.apk"
+          VERSION_CODE="${{ steps.version_calc.outputs.version_code }}"
+          VERSION_NAME="${{ steps.version_calc.outputs.version_name }}"
+          MIN_SUPPORTED="${{ github.event.inputs.min_supported_version || '1' }}"
+          IS_FORCED="${{ github.event.inputs.force_update || 'true' }}"
+          RELEASE_NOTES="${{ github.event.inputs.release_notes || '• Important performance & stability updates\n• Login poster popup enhancements\n• Real-time cloud sync' }}"
+          APK_SIZE="${{ steps.find_apk.outputs.apk_size }}"
+          NOW_MS=$(date +%s%3N)
+          
+          echo "Updating Firestore app_version_info with version $VERSION_NAME (build $VERSION_CODE)..."
+          
+          JSON_PAYLOAD=$(cat <<EOF
+          {
+            "fields": {
+              "latestVersionCode": { "integerValue": "$VERSION_CODE" },
+              "latestVersionName": { "stringValue": "$VERSION_NAME" },
+              "minSupportedVersionCode": { "integerValue": "$MIN_SUPPORTED" },
+              "isForcedUpdate": { "booleanValue": $IS_FORCED },
+              "apkDownloadUrl": { "stringValue": "$APK_DOWNLOAD_URL" },
+              "releaseNotes": { "stringValue": "$RELEASE_NOTES" },
+              "releaseDate": { "stringValue": "$(date '+%B %d, %Y')" },
+              "apkSizeMb": { "stringValue": "$APK_SIZE" },
+              "lastUpdated": { "integerValue": "$NOW_MS" }
+            }
+          }
+          EOF
+          )
+          
+          # Patch Firestore app_settings/app_version_info document
+          curl -s -X PATCH \
+            "https://firestore.googleapis.com/v1/projects/alnoor-islami-8763b/databases/(default)/documents/app_settings/app_version_info?key=AIzaSyBmV50_gdE4t36Fqje4nvAfJwadHrZgMNE" \
+            -H "Content-Type: application/json" \
+            -d "$JSON_PAYLOAD"
+            
+          # Touch manifest to immediately notify all active mobile devices
+          MANIFEST_PAYLOAD=$(cat <<EOF
+          {
+            "fields": {
+              "app_version_v": { "integerValue": "$NOW_MS" },
+              "lastUpdated": { "integerValue": "$NOW_MS" }
+            }
+          }
+          EOF
+          )
+          
+          curl -s -X PATCH \
+            "https://firestore.googleapis.com/v1/projects/alnoor-islami-8763b/databases/(default)/documents/app_settings/sync_manifest?updateMask.fieldPaths=app_version_v&updateMask.fieldPaths=lastUpdated&key=AIzaSyBmV50_gdE4t36Fqje4nvAfJwadHrZgMNE" \
+            -H "Content-Type: application/json" \
+            -d "$MANIFEST_PAYLOAD"
+            
+          echo "Cloud App Version and Manifest successfully updated! All active and starting devices will now receive the update notice."
