@@ -20,8 +20,24 @@ echo "========================================================"
 echo " 🚀 Building Alnoor Islamic App APK v${VERSION_NAME} (Build ${VERSION_CODE})"
 echo "========================================================"
 
-# 1. Build APK
-echo "Step 1: Compiling Release / Debug APK..."
+# 1. Build APK with Persistent Signing Certificate
+echo "Step 1: Setting up persistent keystore and compiling APK..."
+export STORE_PASSWORD="${STORE_PASSWORD:-android}"
+export KEY_PASSWORD="${KEY_PASSWORD:-android}"
+
+if [ ! -f "my-upload-key.jks" ]; then
+    if [ -f "debug.keystore.base64" ]; then
+        cat debug.keystore.base64 | base64 --decode > my-upload-key.jks
+    elif [ -f "debug.keystore" ]; then
+        cp debug.keystore my-upload-key.jks
+    fi
+    if [ -f "my-upload-key.jks" ]; then
+        if ! keytool -list -keystore my-upload-key.jks -storepass android -alias upload > /dev/null 2>&1; then
+            keytool -changealias -alias androiddebugkey -destalias upload -keystore my-upload-key.jks -storepass android || true
+        fi
+    fi
+fi
+
 if [ -f "./gradlew" ]; then
     ./gradlew assembleRelease || ./gradlew assembleDebug
 else
