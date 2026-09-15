@@ -57,19 +57,28 @@ jobs:
         env:
           KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
         run: |
-          # 1. Setup Release upload key
+          # 1. Setup Release / Upload keystore
           if [ -n "$KEYSTORE_BASE64" ]; then
             echo "Decoding provided release keystore from secrets..."
             echo "$KEYSTORE_BASE64" | base64 --decode > my-upload-key.jks
+          elif [ -f "debug.keystore.base64" ]; then
+            echo "Using repository persistent keystore from debug.keystore.base64..."
+            cat debug.keystore.base64 | base64 --decode > my-upload-key.jks
+          elif [ -f "debug.keystore" ]; then
+            echo "Copying existing debug.keystore as upload keystore..."
+            cp debug.keystore my-upload-key.jks
           else
             echo "Generating automated release upload keystore..."
             keytool -genkey -v -keystore my-upload-key.jks -alias upload -keyalg RSA -keysize 2048 -validity 10000 -storepass android -keypass android -dname "CN=Alnoor, OU=Dev, O=Alnoor, L=City, S=State, C=US"
           fi
 
-          # 2. Setup debug.keystore if not present
+          # 2. Setup debug.keystore if needed
           if [ ! -f "debug.keystore" ]; then
-            echo "Generating debug.keystore for build..."
-            keytool -genkey -v -keystore debug.keystore -alias androiddebugkey -keyalg RSA -keysize 2048 -validity 10000 -storepass android -keypass android -dname "CN=Android Debug, O=Android, C=US"
+            if [ -f "debug.keystore.base64" ]; then
+              cat debug.keystore.base64 | base64 --decode > debug.keystore
+            else
+              cp my-upload-key.jks debug.keystore
+            fi
           fi
 
       - name: Generate Build Version Code & Name
