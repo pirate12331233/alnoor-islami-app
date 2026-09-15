@@ -242,14 +242,14 @@ class FirestoreSyncManager private constructor() {
         // 3. Community Events
         val eventsV = getLongValue(fields, "events_v", 0L)
         if (isInitial || eventsV > (lastKnownVersions["events"] ?: 0L)) {
-            syncEventsSection(db)
+            syncEventsSection(db, onNotificationReceived)
             lastKnownVersions["events"] = maxOf(eventsV, System.currentTimeMillis())
         }
 
         // 4. Notices
         val noticesV = getLongValue(fields, "notices_v", 0L)
         if (isInitial || noticesV > (lastKnownVersions["notices"] ?: 0L)) {
-            syncNoticesSection(db)
+            syncNoticesSection(db, onNotificationReceived)
             lastKnownVersions["notices"] = maxOf(noticesV, System.currentTimeMillis())
         }
 
@@ -310,8 +310,8 @@ class FirestoreSyncManager private constructor() {
         onNotificationReceived: ((title: String, body: String) -> Unit)?
     ) {
         syncUsersSection(db)
-        syncEventsSection(db)
-        syncNoticesSection(db)
+        syncEventsSection(db, onNotificationReceived)
+        syncNoticesSection(db, onNotificationReceived)
         syncPopupSection(db)
         syncBooksSection(db)
         syncGallerySection(db)
@@ -336,13 +336,35 @@ class FirestoreSyncManager private constructor() {
         }
     }
 
-    suspend fun syncEventsSection(db: AppDatabase) {
+    suspend fun syncEventsSection(
+        db: AppDatabase,
+        onNotificationReceived: ((title: String, body: String) -> Unit)? = null
+    ) {
         try {
             val remoteEvents = fetchCollection("community_events")
             if (remoteEvents.isNotEmpty()) {
                 val eventEntities = remoteEvents.mapNotNull { parseEventEntity(it) }
                 if (eventEntities.isNotEmpty()) {
+                    // Detect newly added events not previously in local DB
+                    val localEventIds = try { db.eventsDao().getAllEventIds().toSet() } catch (_: Exception) { emptySet() }
+                    val newlyAddedEvents = if (localEventIds.isNotEmpty()) {
+                        eventEntities.filter { !localEventIds.contains(it.id) }
+                    } else {
+                        emptyList()
+                    }
+
                     db.eventsDao().syncEventsWithCloud(eventEntities)
+
+                    // Dispatch notification for new event to user devices
+                    if (newlyAddedEvents.isNotEmpty()) {
+                        val latestEvent = newlyAddedEvents.last()
+                        withContext(Dispatchers.Main) {
+                            onNotificationReceived?.invoke(
+                                "New Community Event",
+                                "${latestEvent.title} on ${latestEvent.dateGregorian}"
+                            )
+                        }
+                    }
                 }
             }
         } catch (e: Exception) {
@@ -350,13 +372,36 @@ class FirestoreSyncManager private constructor() {
         }
     }
 
-    suspend fun syncNoticesSection(db: AppDatabase) {
+    suspend fun syncNoticesSection(
+        db: AppDatabase,
+        onNotificationReceived: ((title: String, body: String) -> Unit)? = null
+    ) {
         try {
             val remoteNotices = fetchCollection("notice_items")
             if (remoteNotices.isNotEmpty()) {
                 val noticeEntities = remoteNotices.mapNotNull { parseNoticeEntity(it) }
                 if (noticeEntities.isNotEmpty()) {
+                    // Detect newly added notices not previously in local DB
+                    val localNoticeIds = try { db.noticesDao().getAllNoticeIds().toSet() } catch (_: Exception) { emptySet() }
+                    val newlyAddedNotices = if (localNoticeIds.isNotEmpty()) {
+                        noticeEntities.filter { !localNoticeIds.contains(it.id) }
+                    } else {
+                        emptyList()
+                    }
+
                     db.noticesDao().syncNoticesWithCloud(noticeEntities)
+
+                    // Dispatch notification for new notice to user devices
+                    if (newlyAddedNotices.isNotEmpty()) {
+                        val latestNotice = newlyAddedNotices.last()
+                        val prefix = if (latestNotice.priority.equals("URGENT", ignoreCase = true)) "🚨 URGENT NOTICE" else "📢 Important Notice"
+                        withContext(Dispatchers.Main) {
+                            onNotificationReceived?.invoke(
+                                prefix,
+                                latestNotice.title
+                            )
+                        }
+                    }
                 }
             }
         } catch (e: Exception) {

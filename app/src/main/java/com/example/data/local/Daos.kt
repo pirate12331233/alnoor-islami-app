@@ -311,6 +311,9 @@ interface EventsDao {
     @Query("UPDATE community_events SET isReminderSet = :isReminder, reminderMinutesBefore = :minutes WHERE id = :id")
     suspend fun updateReminder(id: String, isReminder: Boolean, minutes: Int)
 
+    @Query("SELECT id FROM community_events")
+    suspend fun getAllEventIds(): List<String>
+
     @Query("DELETE FROM community_events WHERE id = :id")
     suspend fun deleteEvent(id: String)
 
@@ -345,6 +348,9 @@ interface NoticesDao {
 
     @Query("UPDATE notice_items SET isPinned = :isPinned WHERE id = :id")
     suspend fun updatePinned(id: String, isPinned: Boolean)
+
+    @Query("SELECT id FROM notice_items")
+    suspend fun getAllNoticeIds(): List<String>
 
     @Query("DELETE FROM notice_items WHERE id = :id")
     suspend fun deleteNotice(id: String)
