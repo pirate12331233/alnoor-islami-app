@@ -732,36 +732,14 @@ class AlnoorRepository private constructor(private val context: Context) {
         _currentUserRole.value = role
     }
 
-    fun triggerFcmPushNotification(title: String, body: String) {
+    fun triggerFcmPushNotification(title: String, body: String, targetTab: String? = null) {
         _latestNotification.value = "$title: $body"
-        try {
-            val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as? android.app.NotificationManager
-            if (notificationManager != null) {
-                val channelId = "alnoor_fcm_broadcasts"
-                if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
-                    val channel = android.app.NotificationChannel(
-                        channelId,
-                        "Alnoor Community Broadcasts",
-                        android.app.NotificationManager.IMPORTANCE_HIGH
-                    ).apply {
-                        description = "Real-time notifications for live broadcasts, events, notices, and replies."
-                        enableVibration(true)
-                    }
-                    notificationManager.createNotificationChannel(channel)
-                }
-                val notification = androidx.core.app.NotificationCompat.Builder(context, channelId)
-                    .setSmallIcon(android.R.drawable.ic_dialog_info)
-                    .setContentTitle(title)
-                    .setContentText(body)
-                    .setStyle(androidx.core.app.NotificationCompat.BigTextStyle().bigText(body))
-                    .setPriority(androidx.core.app.NotificationCompat.PRIORITY_HIGH)
-                    .setAutoCancel(true)
-                    .build()
-                notificationManager.notify((System.currentTimeMillis() % 10000).toInt(), notification)
-            }
-        } catch (e: Exception) {
-            Log.w("AlnoorRepository", "Could not show system tray notification: ${e.message}")
-        }
+        com.example.util.NotificationHelper.showHeadsUpNotification(
+            context = context,
+            title = title,
+            body = body,
+            targetTab = targetTab
+        )
     }
 
     fun clearNotification() {
@@ -777,7 +755,11 @@ class AlnoorRepository private constructor(private val context: Context) {
         }
         val isNowLive = _liveStreams.value.find { it.id == streamId }?.isLiveNow == true
         if (isNowLive) {
-            triggerFcmPushNotification("🔴 Alnoor Live Broadcast Started", "Tune in now to the live Mahafil stream.")
+            triggerFcmPushNotification(
+                "🔴 Alnoor Live Broadcast Started",
+                "Tune in now to the live Mahafil stream.",
+                targetTab = "LIVE_STREAMS"
+            )
         }
     }
 
@@ -785,7 +767,7 @@ class AlnoorRepository private constructor(private val context: Context) {
         _liveStreams.update { list ->
             list.map { if (it.id == stream.id) stream else it }
         }
-        triggerFcmPushNotification("Live Stream Updated", stream.title)
+        triggerFcmPushNotification("Live Stream Updated", stream.title, targetTab = "LIVE_STREAMS")
     }
 
     // --- Events Management (Admin CRUD & User RSVP/Reminder with Real-time Cloud Sync) ---
@@ -814,7 +796,11 @@ class AlnoorRepository private constructor(private val context: Context) {
         }
         // Broadcast immediately to Firestore Cloud so all connected users receive the event in real-time
         firestoreSync.pushEventToCloud(event, repositoryScope)
-        triggerFcmPushNotification("New Community Event", "${event.title} on ${event.dateGregorian}")
+        triggerFcmPushNotification(
+            "New Community Event",
+            "${event.title} on ${event.dateGregorian}",
+            targetTab = "EVENTS"
+        )
     }
 
     fun updateEvent(event: CommunityEvent) {
@@ -841,6 +827,11 @@ class AlnoorRepository private constructor(private val context: Context) {
             )
         }
         firestoreSync.pushEventToCloud(event, repositoryScope)
+        triggerFcmPushNotification(
+            "Community Event Updated",
+            "${event.title} details updated by Admin.",
+            targetTab = "EVENTS"
+        )
     }
 
     fun deleteEvent(eventId: String) {
@@ -1463,7 +1454,7 @@ class AlnoorRepository private constructor(private val context: Context) {
         }
         firestoreSync.pushNoticeToCloud(notice, repositoryScope)
         val prefix = if (notice.priority == NoticePriority.URGENT) "🚨 URGENT NOTICE" else "📢 Important Notice"
-        triggerFcmPushNotification(prefix, notice.title)
+        triggerFcmPushNotification(prefix, notice.title, targetTab = "NOTICES")
     }
 
     fun updateNotice(notice: NoticeItem) {
@@ -1482,7 +1473,7 @@ class AlnoorRepository private constructor(private val context: Context) {
             )
         }
         firestoreSync.pushNoticeToCloud(notice, repositoryScope)
-        triggerFcmPushNotification("Notice Updated", notice.title)
+        triggerFcmPushNotification("Notice Updated", notice.title, targetTab = "NOTICES")
     }
 
     fun deleteNotice(noticeId: String) {
@@ -2255,6 +2246,60 @@ class AlnoorRepository private constructor(private val context: Context) {
         return true
     }
 
+    fun findUserForPasswordReset(email: String, whatsappNumber: String): RegisteredUser? {
+        val cleanEmail = email.trim().lowercase()
+        val cleanPhone = whatsappNumber.filter { it.isDigit() }
+        if (cleanEmail.isBlank() || cleanPhone.isBlank()) return null
+
+        return _registeredUsers.value.find { user ->
+            val userEmail = user.email.trim().lowercase()
+            val userPhone = user.whatsappNumber.filter { it.isDigit() }
+            val emailMatch = userEmail == cleanEmail
+            val phoneMatch = if (cleanPhone.isNotEmpty() && userPhone.isNotEmpty()) {
+                cleanPhone == userPhone ||
+                (cleanPhone.length >= 7 && userPhone.length >= 7 &&
+                 cleanPhone.takeLast(minOf(cleanPhone.length, userPhone.length, 9)) ==
+                 userPhone.takeLast(minOf(cleanPhone.length, userPhone.length, 9)))
+            } else false
+
+            emailMatch && phoneMatch
+        }
+    }
+
+    fun resetUserPasswordSelfService(userId: String, newPassword: String): Result<RegisteredUser> {
+        val trimmedPass = newPassword.trim()
+        if (trimmedPass.isBlank() || trimmedPass.length < 4) {
+            return Result.failure(IllegalArgumentException("Password must be at least 4 characters long."))
+        }
+
+        val user = _registeredUsers.value.find { it.userId == userId }
+            ?: return Result.failure(IllegalArgumentException("User account record not found."))
+
+        val secureHashedPassword = SecurityCryptoManager.hashPassword(trimmedPass)
+
+        repositoryScope.launch {
+            try {
+                db.usersDao().updatePassword(userId, secureHashedPassword)
+            } catch (e: Exception) {
+                Log.e("AlnoorRepository", "Failed updating password in local DB: ${e.message}", e)
+            }
+        }
+
+        val updatedUser = user.copy(password = secureHashedPassword)
+        _registeredUsers.update { list ->
+            list.map { if (it.userId == userId) updatedUser else it }
+        }
+
+        firestoreSync.updateUserPasswordInCloud(userId, secureHashedPassword, repositoryScope)
+
+        triggerFcmPushNotification(
+            "Security: Password Changed",
+            "Password has been successfully updated for ${user.fullName}."
+        )
+
+        return Result.success(updatedUser)
+    }
+
     fun adminDeleteUser(userId: String): Boolean {
         repositoryScope.launch {
             try {
@@ -2492,7 +2537,8 @@ class AlnoorRepository private constructor(private val context: Context) {
         }
         triggerFcmPushNotification(
             "Dashboard Layout Updated",
-            "Action card settings for '$cardKey' updated by Administrator."
+            "Action card settings for '$cardKey' updated by Administrator.",
+            targetTab = "HOME"
         )
     }
 
@@ -2505,7 +2551,8 @@ class AlnoorRepository private constructor(private val context: Context) {
         firestoreSync.pushActionCardConfigsToCloud(configs, repositoryScope)
         triggerFcmPushNotification(
             "Action Cards Updated",
-            "Home dashboard action cards updated and synced to all devices."
+            "Home dashboard action cards updated and synced to all devices.",
+            targetTab = "HOME"
         )
     }
 

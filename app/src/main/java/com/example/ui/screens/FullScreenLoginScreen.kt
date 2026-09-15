@@ -13,6 +13,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -37,6 +38,7 @@ import androidx.compose.material.icons.filled.ExitToApp
 import androidx.compose.material.icons.filled.Fingerprint
 import androidx.compose.material.icons.filled.Key
 import androidx.compose.material.icons.filled.Lock
+import androidx.compose.material.icons.filled.LockReset
 import androidx.compose.material.icons.filled.Mosque
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Phone
@@ -102,6 +104,7 @@ import com.example.data.model.UserRole
 import com.example.data.repository.AlnoorRepository
 import com.example.data.security.SecurityCryptoManager
 import com.example.ui.components.AuthMode
+import com.example.ui.components.ForgotPasswordDialog
 import com.example.ui.theme.Emerald100
 import com.example.ui.theme.Emerald700
 import com.example.ui.theme.Emerald800
@@ -145,6 +148,7 @@ fun FullScreenLoginScreen(
     var adminPasscode by remember { mutableStateOf(savedCreds?.adminPasscode ?: "") }
     var passwordVisible by remember { mutableStateOf(false) }
     var customErrorMessage by remember { mutableStateOf<String?>(null) }
+    var showForgotPasswordDialog by remember { mutableStateOf(false) }
 
     var rememberCredentials by remember { mutableStateOf(savedCreds?.rememberMe ?: true) }
     var biometricEnabled by remember { mutableStateOf(savedCreds?.biometricEnabled ?: true) }
@@ -826,6 +830,36 @@ fun FullScreenLoginScreen(
                             .testTag("login_password_input")
                     )
 
+                    // Forgot Password link for Community Login
+                    if (currentMode == AuthMode.COMMUNITY_LOGIN) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(top = 4.dp),
+                            horizontalArrangement = Arrangement.End
+                        ) {
+                            TextButton(
+                                onClick = { showForgotPasswordDialog = true },
+                                contentPadding = PaddingValues(horizontal = 6.dp, vertical = 2.dp),
+                                modifier = Modifier.testTag("forgot_password_button")
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.LockReset,
+                                    contentDescription = null,
+                                    tint = Emerald800,
+                                    modifier = Modifier.size(16.dp)
+                                )
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text(
+                                    text = "Forgot Password / User ID?",
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = Emerald800
+                                )
+                            }
+                        }
+                    }
+
                     // 4) Admin Passcode Field
                     if (currentMode == AuthMode.ADMIN_SECURE_LOGIN) {
                         Spacer(modifier = Modifier.height(10.dp))
@@ -1088,6 +1122,24 @@ fun FullScreenLoginScreen(
         if (showSecurityAuditDialog) {
             SecurityAuditDialog(
                 onDismiss = { showSecurityAuditDialog = false }
+            )
+        }
+
+        if (showForgotPasswordDialog) {
+            ForgotPasswordDialog(
+                repository = repository,
+                authManager = authManager,
+                initialEmail = email,
+                onDismiss = { showForgotPasswordDialog = false },
+                onPasswordResetSuccess = { updatedUser ->
+                    showForgotPasswordDialog = false
+                    email = updatedUser.email
+                    password = ""
+                    coroutineScope.launch {
+                        authManager.loginWithEmailPassword(updatedUser.email, updatedUser.password, registeredUsers)
+                        onLoginSuccess(updatedUser.role)
+                    }
+                }
             )
         }
     }

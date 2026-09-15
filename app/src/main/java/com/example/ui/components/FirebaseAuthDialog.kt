@@ -26,6 +26,7 @@ import androidx.compose.material.icons.filled.ExitToApp
 import androidx.compose.material.icons.filled.Fingerprint
 import androidx.compose.material.icons.filled.Key
 import androidx.compose.material.icons.filled.Lock
+import androidx.compose.material.icons.filled.LockReset
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Phone
 import androidx.compose.material.icons.filled.Security
@@ -113,6 +114,7 @@ fun FirebaseAuthDialog(
     var adminPasscode by remember { mutableStateOf(savedCreds?.adminPasscode ?: "") }
     var passwordVisible by remember { mutableStateOf(false) }
     var customErrorMessage by remember { mutableStateOf<String?>(null) }
+    var showForgotPasswordDialog by remember { mutableStateOf(false) }
 
     val isSignupValid = displayName.isNotBlank() &&
             email.isNotBlank() &&
@@ -394,6 +396,32 @@ fun FirebaseAuthDialog(
                     modifier = Modifier.fillMaxWidth()
                 )
 
+                // Forgot Password link for Community Login
+                if (currentMode == AuthMode.COMMUNITY_LOGIN) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.End
+                    ) {
+                        TextButton(
+                            onClick = { showForgotPasswordDialog = true }
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.LockReset,
+                                contentDescription = null,
+                                tint = Emerald800,
+                                modifier = Modifier.size(16.dp)
+                            )
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text(
+                                text = "Forgot Password / User ID?",
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                color = Emerald800
+                            )
+                        }
+                    }
+                }
+
                 // Admin Security Passcode Field
                 if (currentMode == AuthMode.ADMIN_SECURE_LOGIN) {
                     OutlinedTextField(
@@ -530,4 +558,20 @@ fun FirebaseAuthDialog(
             }
         }
     )
+
+    if (showForgotPasswordDialog) {
+        ForgotPasswordDialog(
+            repository = effectiveRepo,
+            authManager = authManager,
+            initialEmail = email,
+            onDismiss = { showForgotPasswordDialog = false },
+            onPasswordResetSuccess = { updatedUser ->
+                showForgotPasswordDialog = false
+                email = updatedUser.email
+                password = ""
+                onRoleChanged(updatedUser.role)
+                onDismiss()
+            }
+        )
+    }
 }

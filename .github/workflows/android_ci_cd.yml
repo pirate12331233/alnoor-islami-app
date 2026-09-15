@@ -82,16 +82,27 @@ jobs:
             keytool -genkey -v -keystore debug.keystore -alias androiddebugkey -keyalg RSA -keysize 2048 -validity 10000 -storepass android -keypass android -dname "CN=Android Debug, O=Android, C=US"
           fi
 
+      - name: Generate Build Version Code
+        id: version_calc
+        run: |
+          BUILD_NUM=${{ github.run_number }}
+          VERSION_NAME="${{ github.event.inputs.version_name || '1.2.0' }}"
+          echo "version_code=$BUILD_NUM" >> $GITHUB_OUTPUT
+          echo "version_name=$VERSION_NAME" >> $GITHUB_OUTPUT
+
       - name: Build Android Release APK
         env:
           KEYSTORE_PATH: ${{ github.workspace }}/my-upload-key.jks
           STORE_PASSWORD: ${{ secrets.STORE_PASSWORD || 'android' }}
           KEY_PASSWORD: ${{ secrets.KEY_PASSWORD || 'android' }}
         run: |
+          BUILD_CODE="${{ steps.version_calc.outputs.version_code }}"
+          BUILD_NAME="${{ steps.version_calc.outputs.version_name }}"
+          echo "Building APK with versionCode=$BUILD_CODE, versionName=$BUILD_NAME..."
           if [ -f "./gradlew" ]; then
-            ./gradlew assembleRelease --stacktrace || ./gradlew assembleDebug --stacktrace
+            ./gradlew assembleRelease -PappVersionCode=$BUILD_CODE -PappVersionName="$BUILD_NAME" --stacktrace || ./gradlew assembleDebug -PappVersionCode=$BUILD_CODE -PappVersionName="$BUILD_NAME" --stacktrace
           else
-            gradle assembleRelease --stacktrace || gradle assembleDebug --stacktrace
+            gradle assembleRelease -PappVersionCode=$BUILD_CODE -PappVersionName="$BUILD_NAME" --stacktrace || gradle assembleDebug -PappVersionCode=$BUILD_CODE -PappVersionName="$BUILD_NAME" --stacktrace
           fi
 
       - name: Locate Built APK File
@@ -123,14 +134,6 @@ jobs:
           name: alnoor-app-release-apk
           path: ${{ steps.find_apk.outputs.apk_path }}
           retention-days: 30
-
-      - name: Generate Build Version Code
-        id: version_calc
-        run: |
-          BUILD_NUM=${{ github.run_number }}
-          VERSION_NAME="${{ github.event.inputs.version_name || '1.2.0' }}"
-          echo "version_code=$BUILD_NUM" >> $GITHUB_OUTPUT
-          echo "version_name=$VERSION_NAME" >> $GITHUB_OUTPUT
 
       # -------------------------------------------------------------
       # Automated Cloud Storage Cleanup (Delete Old APKs to Save Storage)

@@ -2,7 +2,9 @@ package com.example
 
 import android.Manifest
 import android.app.Activity
+import android.content.Intent
 import android.content.pm.PackageManager
+import android.os.Build
 import android.os.Bundle
 import androidx.fragment.app.FragmentActivity
 import androidx.activity.compose.BackHandler
@@ -85,14 +87,34 @@ import com.example.ui.theme.MyApplicationTheme
 import com.example.ui.theme.UrgentRed
 
 class MainActivity : FragmentActivity() {
+    private val requestedTabFlow = kotlinx.coroutines.flow.MutableStateFlow<String?>(null)
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         hideSystemControls()
+        handleIntentForNotification(intent)
         setContent {
             MyApplicationTheme {
-                AlnoorAppMainScreen()
+                val requestedTab by requestedTabFlow.collectAsState()
+                AlnoorAppMainScreen(
+                    initialTargetTab = requestedTab,
+                    onTargetTabConsumed = { requestedTabFlow.value = null }
+                )
             }
+        }
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        handleIntentForNotification(intent)
+    }
+
+    private fun handleIntentForNotification(intent: Intent?) {
+        val targetTab = intent?.getStringExtra("target_tab")
+        if (!targetTab.isNullOrBlank()) {
+            requestedTabFlow.value = targetTab
         }
     }
 
@@ -123,7 +145,10 @@ class MainActivity : FragmentActivity() {
 }
 
 @Composable
-fun AlnoorAppMainScreen() {
+fun AlnoorAppMainScreen(
+    initialTargetTab: String? = null,
+    onTargetTabConsumed: () -> Unit = {}
+) {
     val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
     val repository = remember { AlnoorRepository.getInstance(context) }
@@ -171,6 +196,20 @@ fun AlnoorAppMainScreen() {
     var dynamicSyncStatus by remember { mutableStateOf("Connecting to Alnoor Cloud...") }
     var adminBypassedUpdate by remember { mutableStateOf(false) }
 
+    // Respond to target tab from push notification tap
+    LaunchedEffect(initialTargetTab) {
+        if (!initialTargetTab.isNullOrBlank()) {
+            val matchedTab = AppTab.values().find {
+                it.name.equals(initialTargetTab, ignoreCase = true) ||
+                it.title.equals(initialTargetTab, ignoreCase = true)
+            }
+            if (matchedTab != null) {
+                selectedTab = matchedTab
+            }
+            onTargetTabConsumed()
+        }
+    }
+
     // --- REQUIREMENT: Mandatory Update Gate on App Startup ---
     if (isAppOutdated && !adminBypassedUpdate) {
         AppUpdateMandatoryScreen(
@@ -193,6 +232,10 @@ fun AlnoorAppMainScreen() {
 
     val sharedPrefs = remember { context.getSharedPreferences("alnoor_app_prefs", android.content.Context.MODE_PRIVATE) }
 
+    val notificationPermissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission()
+    ) { _ -> }
+
     val locationPermissionLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestMultiplePermissions()
     ) { _ ->
@@ -200,9 +243,20 @@ fun AlnoorAppMainScreen() {
         repository.syncDeviceLocationAndPrayerTimes(force = true)
     }
 
-    // Auto-sync location & prayer times when authenticated or on daily 24h cycle
+    // Auto-request notifications and sync location & prayer times when authenticated
     LaunchedEffect(authUserState.isAuthenticated) {
         if (authUserState.isAuthenticated) {
+            // Request push notification permission on Android 13+
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                val hasNotificationPerm = ContextCompat.checkSelfPermission(
+                    context,
+                    Manifest.permission.POST_NOTIFICATIONS
+                ) == PackageManager.PERMISSION_GRANTED
+                if (!hasNotificationPerm) {
+                    notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+                }
+            }
+
             val hasFine = ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED
             val hasCoarse = ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED
             if (hasFine || hasCoarse) {

@@ -17,8 +17,10 @@ android {
     applicationId = "com.aistudio.alnoorislamic.app"
     minSdk = 24
     targetSdk = 36
-    versionCode = 2
-    versionName = "1.2.0"
+    val vCode = (project.findProperty("appVersionCode") as? String)?.toIntOrNull() ?: 2
+    val vName = (project.findProperty("appVersionName") as? String) ?: "1.2.0"
+    versionCode = vCode
+    versionName = vName
 
     testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
   }
@@ -105,6 +107,7 @@ dependencies {
   // Uncomment to use Firestore:
   // implementation(libs.firebase.firestore)
   // implementation(libs.firebase.analytics)
+  // implementation(libs.firebase.messaging)
 
   // Uncomment ALL FOUR of the following dependencies together to use Firebase Auth and Google
   // Sign-In via Credential Manager:
