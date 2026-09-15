@@ -2,8 +2,10 @@ package com.example.ui.components
 
 import android.media.MediaPlayer
 import android.net.Uri
+import android.view.Gravity
 import android.widget.FrameLayout
 import android.widget.VideoView
+import androidx.activity.compose.BackHandler
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
@@ -33,11 +35,8 @@ import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.FastForward
 import androidx.compose.material.icons.filled.VolumeMute
 import androidx.compose.material.icons.filled.VolumeUp
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -65,8 +64,6 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
-import androidx.compose.ui.window.Dialog
-import androidx.compose.ui.window.DialogProperties
 import com.example.R
 import com.example.ui.theme.Emerald700
 import com.example.ui.theme.Emerald800
@@ -74,7 +71,6 @@ import com.example.ui.theme.Emerald900
 import com.example.ui.theme.Gold300
 import com.example.ui.theme.Gold400
 import com.example.ui.theme.Gold500
-import com.example.ui.theme.Gold600
 import kotlinx.coroutines.delay
 
 @Composable
@@ -89,6 +85,11 @@ fun StartupVideoFullScreenPlayer(
     var isVideoReady by remember { mutableStateOf(false) }
     var isVideoError by remember { mutableStateOf(false) }
     var mediaPlayerRef by remember { mutableStateOf<MediaPlayer?>(null) }
+
+    // Intercept back button to skip intro
+    BackHandler {
+        onFinished()
+    }
 
     // Permanent 10-second startup countdown
     LaunchedEffect(Unit) {
@@ -128,68 +129,61 @@ fun StartupVideoFullScreenPlayer(
         label = "glow_alpha"
     )
 
-    Dialog(
-        onDismissRequest = onFinished,
-        properties = DialogProperties(
-            dismissOnBackPress = true,
-            dismissOnClickOutside = false,
-            usePlatformDefaultWidth = false,
-            decorFitsSystemWindows = false
-        )
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color.Black)
+            .testTag("startup_video_player_screen"),
+        contentAlignment = Alignment.Center
     ) {
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .background(Color.Black)
-                .testTag("startup_video_player_screen")
-        ) {
-            // Built-in Video Player layer for compiled raw resource
-            AndroidView(
-                factory = { ctx ->
-                    VideoView(ctx).apply {
-                        layoutParams = FrameLayout.LayoutParams(
-                            FrameLayout.LayoutParams.MATCH_PARENT,
-                            FrameLayout.LayoutParams.MATCH_PARENT
-                        )
-                        val rawResourceUri = Uri.parse("android.resource://${ctx.packageName}/raw/app_startup_video")
-                        setVideoURI(rawResourceUri)
+        // Built-in Video Player layer for compiled raw resource
+        AndroidView(
+            factory = { ctx ->
+                VideoView(ctx).apply {
+                    layoutParams = FrameLayout.LayoutParams(
+                        FrameLayout.LayoutParams.MATCH_PARENT,
+                        FrameLayout.LayoutParams.MATCH_PARENT,
+                        Gravity.CENTER
+                    )
+                    val rawResourceUri = Uri.parse("android.resource://${ctx.packageName}/raw/app_startup_video")
+                    setVideoURI(rawResourceUri)
 
-                        setOnPreparedListener { mp ->
-                            mediaPlayerRef = mp
-                            mp.isLooping = true
-                            if (isMuted) {
-                                mp.setVolume(0f, 0f)
-                            } else {
-                                mp.setVolume(1f, 1f)
-                            }
-                            isVideoReady = true
-                            mp.start()
+                    setOnPreparedListener { mp ->
+                        mediaPlayerRef = mp
+                        mp.isLooping = false
+                        if (isMuted) {
+                            mp.setVolume(0f, 0f)
+                        } else {
+                            mp.setVolume(1f, 1f)
                         }
-
-                        setOnCompletionListener {
-                            onFinished()
-                        }
-
-                        setOnErrorListener { _, _, _ ->
-                            isVideoError = true
-                            isVideoReady = true
-                            true
-                        }
+                        isVideoReady = true
+                        mp.start()
                     }
-                },
-                update = {
-                    mediaPlayerRef?.let { mp ->
-                        try {
-                            if (isMuted) {
-                                mp.setVolume(0f, 0f)
-                            } else {
-                                mp.setVolume(1f, 1f)
-                            }
-                        } catch (_: Exception) {}
+
+                    setOnCompletionListener {
+                        onFinished()
                     }
-                },
-                modifier = Modifier.fillMaxSize()
-            )
+
+                    setOnErrorListener { _, _, _ ->
+                        isVideoError = true
+                        isVideoReady = true
+                        true
+                    }
+                }
+            },
+            update = {
+                mediaPlayerRef?.let { mp ->
+                    try {
+                        if (isMuted) {
+                            mp.setVolume(0f, 0f)
+                        } else {
+                            mp.setVolume(1f, 1f)
+                        }
+                    } catch (_: Exception) {}
+                }
+            },
+            modifier = Modifier.fillMaxSize()
+        )
 
             // Permanent 10-Second Animated Islamic Logo Video Sequence
             if (isVideoError || !isVideoReady) {
@@ -418,69 +412,23 @@ fun StartupVideoFullScreenPlayer(
                     }
                 }
 
-                // Bottom Overlay Bar (Progress Bar & Auto-transition countdown)
-                Column(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalAlignment = Alignment.CenterHorizontally
+                // Bottom hairline progress indicator (non-intrusive, so video animation is 100% visible)
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(bottom = 8.dp),
+                    contentAlignment = Alignment.Center
                 ) {
-                    Card(
-                        shape = RoundedCornerShape(16.dp),
-                        colors = CardDefaults.cardColors(
-                            containerColor = Color.Black.copy(alpha = 0.75f)
-                        ),
-                        border = androidx.compose.foundation.BorderStroke(1.dp, Emerald700.copy(alpha = 0.6f)),
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Column(modifier = Modifier.padding(16.dp)) {
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Column {
-                                    Text(
-                                        text = "Alnoor Islami 10s Animated Intro",
-                                        style = MaterialTheme.typography.titleSmall,
-                                        fontWeight = FontWeight.Bold,
-                                        color = Color.White
-                                    )
-                                    Text(
-                                        text = "Connecting to spiritual feed & live services...",
-                                        fontSize = 11.sp,
-                                        color = Gold300
-                                    )
-                                }
-
-                                Surface(
-                                    shape = RoundedCornerShape(8.dp),
-                                    color = Emerald900
-                                ) {
-                                    Text(
-                                        text = "${remainingSeconds}s",
-                                        fontSize = 12.sp,
-                                        fontWeight = FontWeight.Black,
-                                        color = Gold400,
-                                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
-                                    )
-                                }
-                            }
-
-                            Spacer(modifier = Modifier.height(10.dp))
-
-                            // 10s Animated Linear Progress Indicator
-                            LinearProgressIndicator(
-                                progress = { progress },
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .height(6.dp)
-                                    .clip(RoundedCornerShape(3.dp)),
-                                color = Gold500,
-                                trackColor = Emerald900.copy(alpha = 0.7f)
-                            )
-                        }
-                    }
+                    LinearProgressIndicator(
+                        progress = { progress },
+                        modifier = Modifier
+                            .fillMaxWidth(0.92f)
+                            .height(3.dp)
+                            .clip(RoundedCornerShape(2.dp)),
+                        color = Gold500,
+                        trackColor = Color.White.copy(alpha = 0.2f)
+                    )
                 }
             }
         }
     }
-}

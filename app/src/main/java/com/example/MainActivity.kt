@@ -191,10 +191,18 @@ fun AlnoorAppMainScreen(
     var showAuthDialog by remember { mutableStateOf(false) }
     var showSignOutConfirmDialog by remember { mutableStateOf(false) }
     var showLoginNoticePopup by remember { mutableStateOf(false) }
-    var showStartupVideo by remember { mutableStateOf(false) }
+    var showStartupVideo by remember { mutableStateOf(true) }
     var isWaitingForPostLoginSync by remember { mutableStateOf(false) }
     var dynamicSyncStatus by remember { mutableStateOf("Connecting to Alnoor Cloud...") }
     var adminBypassedUpdate by remember { mutableStateOf(false) }
+
+    // --- REQUIREMENT: 10-Second Startup Animation Video Runs First Every Time App Opens ---
+    if (showStartupVideo) {
+        StartupVideoFullScreenPlayer(
+            onFinished = { showStartupVideo = false }
+        )
+        return
+    }
 
     // Respond to target tab from push notification tap
     LaunchedEffect(initialTargetTab) {
@@ -317,14 +325,6 @@ fun AlnoorAppMainScreen(
 
                 // Automatically land on Home Dashboard with action cards
                 selectedTab = AppTab.HOME
-                
-                // Show startup video only one time after user signs in
-                val userKey = "startup_video_shown_${authUserState.email ?: "default_user"}"
-                val alreadyShown = sharedPrefs.getBoolean(userKey, false)
-                if (!alreadyShown) {
-                    showStartupVideo = true
-                    sharedPrefs.edit().putBoolean(userKey, true).apply()
-                }
                 
                 // Show Important Notice on login if configured
                 showLoginNoticePopup = true
@@ -600,15 +600,8 @@ fun AlnoorAppMainScreen(
         }
     }
 
-    // --- 10-Second Startup Video Full-Screen Player on Login / Launch ---
-    if (showStartupVideo) {
-        StartupVideoFullScreenPlayer(
-            onFinished = { showStartupVideo = false }
-        )
-    }
-
     // --- Full-Screen Important Notice Alert Popup on Login / App Launch ---
-    if (showLoginNoticePopup && (importantNoticePopup.showOnLogin || currentRole == UserRole.ADMIN) && !showStartupVideo) {
+    if (showLoginNoticePopup && (importantNoticePopup.showOnLogin || currentRole == UserRole.ADMIN)) {
         ImportantNoticeFullScreenDialog(
             popup = importantNoticePopup,
             currentRole = currentRole,
@@ -628,13 +621,6 @@ fun AlnoorAppMainScreen(
                 repository.setUserRole(role)
                 // Landing screen behavior: upon user login, land on Home Dashboard with vertical action cards
                 selectedTab = AppTab.HOME
-                // Play startup video only one time upon sign-in
-                val userKey = "startup_video_shown_${authUserState.email ?: "default_user"}"
-                val alreadyShown = sharedPrefs.getBoolean(userKey, false)
-                if (!alreadyShown) {
-                    showStartupVideo = true
-                    sharedPrefs.edit().putBoolean(userKey, true).apply()
-                }
                 // Trigger Important Notice popup on login
                 showLoginNoticePopup = true
             }
