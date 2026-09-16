@@ -314,6 +314,9 @@ interface EventsDao {
     @Query("SELECT id FROM community_events")
     suspend fun getAllEventIds(): List<String>
 
+    @Query("SELECT * FROM community_events")
+    suspend fun getExistingEventsList(): List<CommunityEventEntity>
+
     @Query("DELETE FROM community_events WHERE id = :id")
     suspend fun deleteEvent(id: String)
 
@@ -351,6 +354,9 @@ interface NoticesDao {
 
     @Query("SELECT id FROM notice_items")
     suspend fun getAllNoticeIds(): List<String>
+
+    @Query("SELECT * FROM notice_items")
+    suspend fun getExistingNoticesList(): List<NoticeItemEntity>
 
     @Query("DELETE FROM notice_items WHERE id = :id")
     suspend fun deleteNotice(id: String)
