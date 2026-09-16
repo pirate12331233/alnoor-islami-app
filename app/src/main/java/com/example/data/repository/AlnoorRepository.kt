@@ -740,6 +740,8 @@ class AlnoorRepository private constructor(private val context: Context) {
             body = body,
             targetTab = targetTab
         )
+        // Broadcast notification to Firestore cloud so all closed/backgrounded devices receive it
+        firestoreSync.pushBroadcastNotificationToCloud(title, body, targetTab, repositoryScope)
     }
 
     fun clearNotification() {

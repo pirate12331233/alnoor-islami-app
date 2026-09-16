@@ -91,9 +91,15 @@ class MainActivity : FragmentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) {
+            setShowWhenLocked(true)
+            setTurnScreenOn(true)
+        }
         enableEdgeToEdge()
         hideSystemControls()
         handleIntentForNotification(intent)
+        // Ensure background sync scheduler is active
+        com.example.util.AlnoorBackgroundSyncReceiver.schedule(this)
         setContent {
             MyApplicationTheme {
                 val requestedTab by requestedTabFlow.collectAsState()
@@ -128,6 +134,12 @@ class MainActivity : FragmentActivity() {
         if (hasFocus) {
             hideSystemControls()
         }
+    }
+
+    override fun onStop() {
+        super.onStop()
+        // Ensure background sync scheduler is active when app is minimized / closed
+        com.example.util.AlnoorBackgroundSyncReceiver.schedule(this)
     }
 
     private fun hideSystemControls() {

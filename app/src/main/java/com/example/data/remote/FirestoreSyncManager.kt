@@ -1,6 +1,8 @@
 package com.example.data.remote
 
+import android.content.Context
 import android.util.Log
+import com.example.util.NotificationHelper
 import com.example.data.local.AppDatabase
 import com.example.data.local.CommunityEventEntity
 import com.example.data.local.DaroodSubmissionEntity
@@ -114,6 +116,156 @@ class FirestoreSyncManager private constructor() {
             } catch (e: Exception) {
                 Log.w(TAG, "Failed touching manifest for $sectionKey: ${e.message}")
             }
+        }
+    }
+
+    fun pushBroadcastNotificationToCloud(
+        title: String,
+        body: String,
+        targetTab: String? = null,
+        scope: CoroutineScope
+    ) {
+        scope.launch(Dispatchers.IO) {
+            try {
+                val notifId = "notif_${System.currentTimeMillis()}"
+                val fields = JSONObject().apply {
+                    put("id", stringField(notifId))
+                    put("title", stringField(title))
+                    put("body", stringField(body))
+                    put("targetTab", stringField(targetTab ?: ""))
+                    put("timestamp", intField(System.currentTimeMillis()))
+                }
+                saveDocument("broadcast_notifications", notifId, fields)
+                touchManifest("broadcast", scope)
+                Log.d(TAG, "Synced broadcast notification to Firestore: $title")
+            } catch (e: Exception) {
+                Log.e(TAG, "Error pushing broadcast notification: ${e.message}", e)
+            }
+        }
+    }
+
+    suspend fun performBackgroundSync(context: Context) {
+        try {
+            val manifestDoc = fetchDocument("app_settings", "sync_manifest") ?: return
+            val fields = manifestDoc.optJSONObject("fields") ?: JSONObject()
+            val prefs = context.getSharedPreferences("alnoor_sync_prefs", Context.MODE_PRIVATE)
+            val db = AppDatabase.getDatabase(context)
+
+            // 1. Check Broadcast Alerts
+            val broadcastV = getLongValue(fields, "broadcast_v", 0L)
+            val lastBroadcastV = prefs.getLong("bg_broadcast_v", 0L)
+            if (broadcastV > lastBroadcastV) {
+                val remoteAlerts = fetchCollection("broadcast_notifications")
+                if (remoteAlerts.isNotEmpty()) {
+                    val latest = remoteAlerts.maxByOrNull {
+                        getLongValue(it.optJSONObject("fields") ?: JSONObject(), "timestamp", 0L)
+                    }
+                    if (latest != null) {
+                        val alertFields = latest.optJSONObject("fields") ?: JSONObject()
+                        val title = getStringValue(alertFields, "title", "Alnoor Community Alert")
+                        val body = getStringValue(alertFields, "body", "")
+                        val targetTab = getStringValue(alertFields, "targetTab", "")
+                        NotificationHelper.showHeadsUpNotification(
+                            context = context,
+                            title = title,
+                            body = body,
+                            targetTab = if (targetTab.isNotBlank()) targetTab else null
+                        )
+                    }
+                }
+                prefs.edit().putLong("bg_broadcast_v", maxOf(broadcastV, System.currentTimeMillis())).apply()
+            }
+
+            // 2. Check Events
+            val eventsV = getLongValue(fields, "events_v", 0L)
+            val lastEventsV = prefs.getLong("bg_events_v", 0L)
+            if (eventsV > lastEventsV) {
+                val remoteEvents = fetchCollection("community_events")
+                if (remoteEvents.isNotEmpty()) {
+                    val eventEntities = remoteEvents.mapNotNull { parseEventEntity(it) }
+                    if (eventEntities.isNotEmpty()) {
+                        val localEvents: List<CommunityEventEntity> = try { db.eventsDao().getExistingEventsList() } catch (_: Exception) { emptyList() }
+                        val localMap = localEvents.associateBy { it.id }
+                        val newlyAdded = if (localMap.isNotEmpty()) eventEntities.filter { !localMap.containsKey(it.id) } else emptyList()
+                        val updated = if (localMap.isNotEmpty()) eventEntities.filter { r: CommunityEventEntity ->
+                            val l = localMap[r.id]
+                            l != null && (l.title != r.title || l.dateGregorian != r.dateGregorian || l.time != r.time || l.venue != r.venue || l.description != r.description)
+                        } else emptyList()
+
+                        db.eventsDao().syncEventsWithCloud(eventEntities)
+
+                        if (newlyAdded.isNotEmpty()) {
+                            val ev = newlyAdded.last()
+                            NotificationHelper.showHeadsUpNotification(
+                                context = context,
+                                title = "New Community Event",
+                                body = "${ev.title} on ${ev.dateGregorian}",
+                                targetTab = "EVENTS"
+                            )
+                        } else if (updated.isNotEmpty()) {
+                            val ev = updated.last()
+                            NotificationHelper.showHeadsUpNotification(
+                                context = context,
+                                title = "Community Event Updated",
+                                body = "${ev.title} details updated by Admin.",
+                                targetTab = "EVENTS"
+                            )
+                        }
+                    }
+                }
+                prefs.edit().putLong("bg_events_v", maxOf(eventsV, System.currentTimeMillis())).apply()
+            }
+
+            // 3. Check Notices
+            val noticesV = getLongValue(fields, "notices_v", 0L)
+            val lastNoticesV = prefs.getLong("bg_notices_v", 0L)
+            if (noticesV > lastNoticesV) {
+                val remoteNotices = fetchCollection("notice_items")
+                if (remoteNotices.isNotEmpty()) {
+                    val noticeEntities = remoteNotices.mapNotNull { parseNoticeEntity(it) }
+                    if (noticeEntities.isNotEmpty()) {
+                        val localNotices: List<NoticeItemEntity> = try { db.noticesDao().getExistingNoticesList() } catch (_: Exception) { emptyList() }
+                        val localNoticeMap = localNotices.associateBy { it.id }
+                        val newlyAddedNotice = if (localNoticeMap.isNotEmpty()) noticeEntities.filter { !localNoticeMap.containsKey(it.id) } else emptyList()
+                        val updatedNotice = if (localNoticeMap.isNotEmpty()) noticeEntities.filter { r: NoticeItemEntity ->
+                            val l = localNoticeMap[r.id]
+                            l != null && (l.title != r.title || l.content != r.content || l.priority != r.priority)
+                        } else emptyList()
+
+                        db.noticesDao().syncNoticesWithCloud(noticeEntities)
+
+                        if (newlyAddedNotice.isNotEmpty()) {
+                            val n = newlyAddedNotice.last()
+                            val prefix = if (n.priority.equals("URGENT", ignoreCase = true)) "🚨 URGENT NOTICE" else "📢 Important Notice"
+                            NotificationHelper.showHeadsUpNotification(
+                                context = context,
+                                title = prefix,
+                                body = n.title,
+                                targetTab = "NOTICES"
+                            )
+                        } else if (updatedNotice.isNotEmpty()) {
+                            val n = updatedNotice.last()
+                            NotificationHelper.showHeadsUpNotification(
+                                context = context,
+                                title = "Notice Updated",
+                                body = n.title,
+                                targetTab = "NOTICES"
+                            )
+                        }
+                    }
+                }
+                prefs.edit().putLong("bg_notices_v", maxOf(noticesV, System.currentTimeMillis())).apply()
+            }
+
+            // 4. Check Popups
+            val popupV = getLongValue(fields, "popup_v", 0L)
+            val lastPopupV = prefs.getLong("bg_popup_v", 0L)
+            if (popupV > lastPopupV) {
+                syncPopupSection(db)
+                prefs.edit().putLong("bg_popup_v", maxOf(popupV, System.currentTimeMillis())).apply()
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "Background sync error: ${e.message}")
         }
     }
 
@@ -345,23 +497,40 @@ class FirestoreSyncManager private constructor() {
             if (remoteEvents.isNotEmpty()) {
                 val eventEntities = remoteEvents.mapNotNull { parseEventEntity(it) }
                 if (eventEntities.isNotEmpty()) {
-                    // Detect newly added events not previously in local DB
-                    val localEventIds = try { db.eventsDao().getAllEventIds().toSet() } catch (_: Exception) { emptySet() }
-                    val newlyAddedEvents = if (localEventIds.isNotEmpty()) {
-                        eventEntities.filter { !localEventIds.contains(it.id) }
+                    // Detect newly added or updated events
+                    val localEvents: List<CommunityEventEntity> = try { db.eventsDao().getExistingEventsList() } catch (_: Exception) { emptyList() }
+                    val localMap = localEvents.associateBy { it.id }
+                    val newlyAddedEvents = if (localMap.isNotEmpty()) {
+                        eventEntities.filter { !localMap.containsKey(it.id) }
+                    } else {
+                        emptyList()
+                    }
+                    val updatedEvents = if (localMap.isNotEmpty()) {
+                        eventEntities.filter { remote: CommunityEventEntity ->
+                            val local = localMap[remote.id]
+                            local != null && (local.title != remote.title || local.dateGregorian != remote.dateGregorian || local.time != remote.time || local.venue != remote.venue || local.description != remote.description)
+                        }
                     } else {
                         emptyList()
                     }
 
                     db.eventsDao().syncEventsWithCloud(eventEntities)
 
-                    // Dispatch notification for new event to user devices
+                    // Dispatch notification for new or updated event to user devices
                     if (newlyAddedEvents.isNotEmpty()) {
                         val latestEvent = newlyAddedEvents.last()
                         withContext(Dispatchers.Main) {
                             onNotificationReceived?.invoke(
                                 "New Community Event",
                                 "${latestEvent.title} on ${latestEvent.dateGregorian}"
+                            )
+                        }
+                    } else if (updatedEvents.isNotEmpty()) {
+                        val latestEvent = updatedEvents.last()
+                        withContext(Dispatchers.Main) {
+                            onNotificationReceived?.invoke(
+                                "Community Event Updated",
+                                "${latestEvent.title} details updated by Admin."
                             )
                         }
                     }
@@ -381,23 +550,40 @@ class FirestoreSyncManager private constructor() {
             if (remoteNotices.isNotEmpty()) {
                 val noticeEntities = remoteNotices.mapNotNull { parseNoticeEntity(it) }
                 if (noticeEntities.isNotEmpty()) {
-                    // Detect newly added notices not previously in local DB
-                    val localNoticeIds = try { db.noticesDao().getAllNoticeIds().toSet() } catch (_: Exception) { emptySet() }
-                    val newlyAddedNotices = if (localNoticeIds.isNotEmpty()) {
-                        noticeEntities.filter { !localNoticeIds.contains(it.id) }
+                    // Detect newly added or updated notices
+                    val localNotices: List<NoticeItemEntity> = try { db.noticesDao().getExistingNoticesList() } catch (_: Exception) { emptyList() }
+                    val localNoticeMap = localNotices.associateBy { it.id }
+                    val newlyAddedNotices = if (localNoticeMap.isNotEmpty()) {
+                        noticeEntities.filter { !localNoticeMap.containsKey(it.id) }
+                    } else {
+                        emptyList()
+                    }
+                    val updatedNotices = if (localNoticeMap.isNotEmpty()) {
+                        noticeEntities.filter { remote: NoticeItemEntity ->
+                            val local = localNoticeMap[remote.id]
+                            local != null && (local.title != remote.title || local.content != remote.content || local.priority != remote.priority)
+                        }
                     } else {
                         emptyList()
                     }
 
                     db.noticesDao().syncNoticesWithCloud(noticeEntities)
 
-                    // Dispatch notification for new notice to user devices
+                    // Dispatch notification for new or updated notice to user devices
                     if (newlyAddedNotices.isNotEmpty()) {
                         val latestNotice = newlyAddedNotices.last()
                         val prefix = if (latestNotice.priority.equals("URGENT", ignoreCase = true)) "🚨 URGENT NOTICE" else "📢 Important Notice"
                         withContext(Dispatchers.Main) {
                             onNotificationReceived?.invoke(
                                 prefix,
+                                latestNotice.title
+                            )
+                        }
+                    } else if (updatedNotices.isNotEmpty()) {
+                        val latestNotice = updatedNotices.last()
+                        withContext(Dispatchers.Main) {
+                            onNotificationReceived?.invoke(
+                                "Notice Updated",
                                 latestNotice.title
                             )
                         }
