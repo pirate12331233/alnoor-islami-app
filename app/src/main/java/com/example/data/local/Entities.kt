@@ -42,6 +42,8 @@ data class UserInquiryEntity(
     val reply: String? = null,
     val isRead: Boolean = false,
     val internalNotes: String? = null,
+    val isFromAdmin: Boolean = false,
+    val threadId: String = "",
     val createdAt: Long = System.currentTimeMillis()
 )
 

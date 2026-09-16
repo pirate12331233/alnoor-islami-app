@@ -557,6 +557,15 @@ fun AlnoorAppMainScreen(
                         onMarkAsRead = { id, isRead -> repository.markMessageRead(id, isRead) },
                         onSaveInternalNotes = { id, notes -> repository.saveMessageInternalNotes(id, notes) },
                         onDeleteInquiry = { id -> repository.deleteMessage(id) },
+                        onSendChatMessage = { threadId, senderName, senderContact, text, isFromAdmin, category ->
+                            repository.sendChatMessage(threadId, senderName, senderContact, text, isFromAdmin, category)
+                        },
+                        onDeleteThread = { threadId, contact, msgs ->
+                            repository.deleteThread(threadId, contact, msgs)
+                        },
+                        onMarkThreadRead = { threadId, contact ->
+                            repository.markThreadAsRead(threadId, contact)
+                        },
                         onNavigateToAuth = { showAuthDialog = true }
                     )
                 }

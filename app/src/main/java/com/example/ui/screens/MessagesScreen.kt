@@ -1,6 +1,8 @@
 package com.example.ui.screens
 
 import android.content.Context
+import android.content.Intent
+import android.net.Uri
 import android.widget.Toast
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.background
@@ -8,6 +10,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -16,28 +19,40 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.AdminPanelSettings
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.Send
+import androidx.compose.material.icons.filled.AccountCircle
+import androidx.compose.material.icons.filled.Call
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.Clear
+import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.DoneAll
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.EditNote
-import androidx.compose.material.icons.filled.Email
 import androidx.compose.material.icons.filled.FilterList
+import androidx.compose.material.icons.filled.Forum
 import androidx.compose.material.icons.filled.HourglassEmpty
+import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Mail
-import androidx.compose.material.icons.filled.MarkEmailRead
-import androidx.compose.material.icons.filled.MarkEmailUnread
+import androidx.compose.material.icons.filled.Mosque
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Phone
-import androidx.compose.material.icons.filled.QuestionAnswer
 import androidx.compose.material.icons.filled.Search
-import androidx.compose.material.icons.filled.Send
+import androidx.compose.material.icons.filled.Shield
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Badge
+import androidx.compose.material3.BadgedBox
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -46,36 +61,41 @@ import androidx.compose.material3.Divider
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Surface
-import androidx.compose.material3.Tab
-import androidx.compose.material3.TabRow
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.data.model.AdminMessage
+import com.example.data.model.ChatThread
 import com.example.data.model.MessageCategory
 import com.example.data.model.MessageStatus
 import com.example.data.model.UserRole
-import com.example.ui.theme.Emerald100
 import com.example.ui.theme.Emerald700
 import com.example.ui.theme.Emerald800
 import com.example.ui.theme.Emerald900
@@ -85,7 +105,147 @@ import com.example.ui.theme.Gold500
 import com.example.ui.theme.Gold600
 import com.example.ui.theme.SuccessGreen
 import com.example.ui.theme.UrgentRed
+import kotlinx.coroutines.launch
 import java.util.UUID
+
+/**
+ * Normalized key to identify a user's conversation thread.
+ * Combines contact and sender name so 1 user = 1 persistent thread.
+ */
+fun getMessageThreadId(msg: AdminMessage): String {
+    if (msg.threadId.isNotBlank()) return msg.threadId.trim()
+    val cleanContact = msg.senderContact.trim().lowercase().filter { it.isLetterOrDigit() }
+    if (cleanContact.isNotBlank() && cleanContact != "notprovided" && cleanContact != "unknown") {
+        return "contact_$cleanContact"
+    }
+    val cleanName = msg.senderName.trim().lowercase().filter { it.isLetterOrDigit() }
+    if (cleanName.isNotBlank() && cleanName != "communitymember") {
+        return "name_$cleanName"
+    }
+    return "thread_${msg.id.take(8)}"
+}
+
+/**
+ * Clean data model for a single message bubble in a chat conversation.
+ */
+data class ChatBubbleItem(
+    val id: String,
+    val text: String,
+    val timestamp: String,
+    val isFromAdmin: Boolean,
+    val senderName: String,
+    val senderContact: String,
+    val isRead: Boolean,
+    val category: MessageCategory = MessageCategory.GENERAL,
+    val originalInquiryId: String = ""
+)
+
+/**
+ * Converts inquiries into chronologically ordered chat bubbles for a thread,
+ * cleanly handling both new threaded messages and legacy inquiries with replies.
+ */
+fun buildChatBubbles(messages: List<AdminMessage>): List<ChatBubbleItem> {
+    val bubbles = mutableListOf<ChatBubbleItem>()
+    val sorted = messages.sortedBy { it.createdAt }
+
+    for (msg in sorted) {
+        if (msg.isFromAdmin) {
+            bubbles.add(
+                ChatBubbleItem(
+                    id = msg.id,
+                    text = msg.message,
+                    timestamp = msg.timestamp,
+                    isFromAdmin = true,
+                    senderName = msg.senderName.ifBlank { "Mosque Administration" },
+                    senderContact = msg.senderContact,
+                    isRead = true,
+                    category = msg.category,
+                    originalInquiryId = msg.id
+                )
+            )
+        } else {
+            // User message bubble
+            bubbles.add(
+                ChatBubbleItem(
+                    id = msg.id,
+                    text = msg.message,
+                    timestamp = msg.timestamp,
+                    isFromAdmin = false,
+                    senderName = msg.senderName,
+                    senderContact = msg.senderContact,
+                    isRead = msg.isRead,
+                    category = msg.category,
+                    originalInquiryId = msg.id
+                )
+            )
+            // If this message has a legacy adminReply attached, render it as the reply bubble right after
+            if (!msg.adminReply.isNullOrBlank()) {
+                bubbles.add(
+                    ChatBubbleItem(
+                        id = "${msg.id}_reply",
+                        text = msg.adminReply,
+                        timestamp = msg.timestamp,
+                        isFromAdmin = true,
+                        senderName = "Mosque Administration",
+                        senderContact = "helpline@alnoor.org",
+                        isRead = true,
+                        category = msg.category,
+                        originalInquiryId = msg.id
+                    )
+                )
+            }
+        }
+    }
+    return bubbles
+}
+
+/**
+ * Aggregates all inquiry messages into WhatsApp-style conversation threads (1 per user).
+ */
+fun buildChatThreads(inquiries: List<AdminMessage>): List<ChatThread> {
+    val groups = inquiries.groupBy { getMessageThreadId(it) }
+
+    return groups.map { (threadId, msgs) ->
+        val sorted = msgs.sortedBy { it.createdAt }
+        val latest = sorted.last()
+
+        // Discover most descriptive user name and contact from user messages
+        val userMsg = sorted.firstOrNull { !it.isFromAdmin && it.senderName.isNotBlank() && it.senderName != "Community Member" }
+            ?: sorted.firstOrNull { !it.isFromAdmin }
+            ?: sorted.first()
+
+        val contact = userMsg.senderContact.ifBlank {
+            sorted.firstOrNull { it.senderContact.isNotBlank() }?.senderContact ?: "Not provided"
+        }
+
+        val unreadCount = msgs.count { !it.isRead && !it.isFromAdmin }
+        val isPending = msgs.any { !it.isFromAdmin && it.status == MessageStatus.PENDING }
+        val category = sorted.firstOrNull { !it.isFromAdmin }?.category ?: MessageCategory.GENERAL
+        val staffNotes = sorted.mapNotNull { it.internalNotes }.lastOrNull { it.isNotBlank() }
+
+        val latestSnippet = if (latest.isFromAdmin) {
+            "Admin: ${latest.message}"
+        } else if (!latest.adminReply.isNullOrBlank()) {
+            "Admin: ${latest.adminReply}"
+        } else {
+            latest.message
+        }
+
+        ChatThread(
+            threadId = threadId,
+            userName = userMsg.senderName.ifBlank { "Community Member" },
+            userContact = contact,
+            category = category,
+            latestMessage = latestSnippet,
+            latestTimestamp = latest.timestamp,
+            latestCreatedAt = latest.createdAt,
+            unreadCount = unreadCount,
+            isPending = isPending,
+            messages = sorted,
+            internalNotes = staffNotes
+        )
+    }.sortedByDescending { it.latestCreatedAt }
+}
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -97,21 +257,28 @@ fun MessagesScreen(
     onMarkAsRead: (String, Boolean) -> Unit,
     onSaveInternalNotes: (String, String) -> Unit,
     onDeleteInquiry: (String) -> Unit,
+    onSendChatMessage: (threadId: String, senderName: String, senderContact: String, text: String, isFromAdmin: Boolean, category: MessageCategory) -> Unit = { _, _, _, _, _, _ -> },
+    onDeleteThread: (threadId: String, contact: String, messages: List<AdminMessage>) -> Unit = { _, _, _ -> },
+    onMarkThreadRead: (threadId: String, contact: String) -> Unit = { _, _ -> },
     onNavigateToAuth: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     if (currentRole == UserRole.ADMIN) {
-        ModerationInboxView(
+        AdminChatMasterView(
             inquiries = inquiries,
+            onSendChatMessage = onSendChatMessage,
             onResolveInquiry = onResolveInquiry,
             onMarkAsRead = onMarkAsRead,
             onSaveInternalNotes = onSaveInternalNotes,
             onDeleteInquiry = onDeleteInquiry,
+            onDeleteThread = onDeleteThread,
+            onMarkThreadRead = onMarkThreadRead,
             modifier = modifier
         )
     } else {
-        UserMessagesPortalView(
+        UserWhatsAppChatView(
             inquiries = inquiries,
+            onSendChatMessage = onSendChatMessage,
             onSubmitInquiry = onSubmitInquiry,
             onAdminLoginPrompt = onNavigateToAuth,
             modifier = modifier
@@ -120,588 +287,626 @@ fun MessagesScreen(
 }
 
 /**
- * User Portal: Allows community members to submit new inquiries/Dua requests
- * AND view the list of their submitted inquiries along with the Admin's official replies!
+ * =====================================================================
+ * USER PORTAL: WHATSAPP-STYLE 1-TO-1 THREADED CHAT WITH ADMINISTRATION
+ * =====================================================================
+ * A single, unified chat thread where all messages sent by this user and all
+ * replies from the mosque administration appear in chronological chat bubbles.
  */
 @Composable
-fun UserMessagesPortalView(
+fun UserWhatsAppChatView(
     inquiries: List<AdminMessage>,
+    onSendChatMessage: (threadId: String, senderName: String, senderContact: String, text: String, isFromAdmin: Boolean, category: MessageCategory) -> Unit,
     onSubmitInquiry: (AdminMessage) -> Unit,
     onAdminLoginPrompt: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
+    val clipboardManager = LocalClipboardManager.current
     val prefs = remember { context.getSharedPreferences("alnoor_user_inquiries_prefs", Context.MODE_PRIVATE) }
 
-    var sentIds by remember {
-        mutableStateOf(prefs.getStringSet("sent_inquiry_ids", emptySet())?.toSet() ?: emptySet())
+    // Persistent User Identity on this device
+    var savedName by remember {
+        mutableStateOf(prefs.getString("last_sender_name", "") ?: "")
     }
     var savedContact by remember {
         mutableStateOf(prefs.getString("last_sender_contact", "") ?: "")
     }
-    var savedName by remember {
-        mutableStateOf(prefs.getString("last_sender_name", "") ?: "")
+    var deviceThreadId by remember {
+        val existing = prefs.getString("user_device_thread_id", "") ?: ""
+        if (existing.isNotBlank()) {
+            mutableStateOf(existing)
+        } else {
+            val generated = "device_${UUID.randomUUID().toString().take(8)}"
+            prefs.edit().putString("user_device_thread_id", generated).apply()
+            mutableStateOf(generated)
+        }
+    }
+    var sentIds by remember {
+        mutableStateOf(prefs.getStringSet("sent_inquiry_ids", emptySet())?.toSet() ?: emptySet())
     }
 
-    // Filter inquiries that match this device/user
-    val userInquiries = remember(inquiries, sentIds, savedContact, savedName) {
-        inquiries.filter { inquiry ->
-            sentIds.contains(inquiry.id) ||
-            (savedContact.isNotBlank() && inquiry.senderContact.trim().equals(savedContact.trim(), ignoreCase = true)) ||
-            (savedName.isNotBlank() && inquiry.senderName.trim().equals(savedName.trim(), ignoreCase = true))
+    var showProfileDialog by remember { mutableStateOf(false) }
+    var showInfoDialog by remember { mutableStateOf(false) }
+    var selectedCategory by remember { mutableStateOf(MessageCategory.GENERAL) }
+    var messageInput by remember { mutableStateOf("") }
+
+    val coroutineScope = rememberCoroutineScope()
+    val listState = rememberLazyListState()
+
+    // Determine this user's current conversation thread
+    val normalizedContactKey = savedContact.trim().lowercase().filter { it.isLetterOrDigit() }
+    val normalizedNameKey = savedName.trim().lowercase().filter { it.isLetterOrDigit() }
+
+    // Find all messages belonging to this user
+    val userMessages = inquiries.filter { msg ->
+        val msgContact = msg.senderContact.trim().lowercase().filter { it.isLetterOrDigit() }
+        val msgName = msg.senderName.trim().lowercase().filter { it.isLetterOrDigit() }
+
+        sentIds.contains(msg.id) ||
+                (msg.threadId.isNotBlank() && (msg.threadId == deviceThreadId || (normalizedContactKey.isNotBlank() && msg.threadId == "contact_$normalizedContactKey"))) ||
+                (normalizedContactKey.isNotBlank() && msgContact == normalizedContactKey) ||
+                (normalizedNameKey.isNotBlank() && msgName == normalizedNameKey && normalizedNameKey != "communitymember")
+    }.sortedBy { it.createdAt }
+
+    val chatBubbles = buildChatBubbles(userMessages)
+
+    // Auto-scroll to bottom on new messages
+    LaunchedEffect(chatBubbles.size) {
+        if (chatBubbles.isNotEmpty()) {
+            listState.animateScrollToItem(chatBubbles.size - 1)
         }
     }
 
-    val repliedCount = remember(userInquiries) {
-        userInquiries.count { it.status == MessageStatus.RESOLVED && !it.adminReply.isNullOrBlank() }
+    // Effective threadId for this user
+    val effectiveThreadId = if (normalizedContactKey.isNotBlank()) {
+        "contact_$normalizedContactKey"
+    } else {
+        deviceThreadId
     }
 
-    // Default to Inquiries/Replies tab if there are replied messages, otherwise 0
-    var selectedTab by remember { mutableStateOf(if (repliedCount > 0) 1 else 0) }
-
-    Column(modifier = modifier.fillMaxSize()) {
-        // Alnoor Islamic Header
-        Card(
-            shape = RoundedCornerShape(bottomStart = 16.dp, bottomEnd = 16.dp),
-            colors = CardDefaults.cardColors(containerColor = Emerald900),
+    Column(
+        modifier = modifier
+            .fillMaxSize()
+            .background(MaterialTheme.colorScheme.background)
+    ) {
+        // --- WHATSAPP-STYLE HEADER BAR ---
+        Surface(
+            color = Emerald900,
+            shadowElevation = 4.dp,
             modifier = Modifier.fillMaxWidth()
         ) {
-            Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 14.dp)) {
+            Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp)) {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
                 ) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(
-                            imageVector = Icons.Default.Mail,
-                            contentDescription = null,
-                            tint = Gold400,
-                            modifier = Modifier.size(24.dp)
-                        )
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text(
-                            text = "Mosque Helpline & Inquiries",
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.Bold,
-                            color = Color.White
-                        )
-                    }
-                    IconButton(
-                        onClick = onAdminLoginPrompt,
-                        modifier = Modifier.size(32.dp)
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.AdminPanelSettings,
-                            contentDescription = "Admin Login",
-                            tint = Gold400,
-                            modifier = Modifier.size(20.dp)
-                        )
-                    }
-                }
-                Spacer(modifier = Modifier.height(4.dp))
-                Text(
-                    text = "Submit Dua requests & questions, and track official replies from Mosque Administration.",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = Gold300
-                )
-            }
-        }
-
-        // Navigation Tabs: Send vs My Inquiries & Replies
-        TabRow(
-            selectedTabIndex = selectedTab,
-            containerColor = MaterialTheme.colorScheme.surface,
-            contentColor = Emerald800
-        ) {
-            Tab(
-                selected = selectedTab == 0,
-                onClick = { selectedTab = 0 },
-                text = {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(Icons.Default.Send, contentDescription = null, modifier = Modifier.size(16.dp))
-                        Spacer(modifier = Modifier.width(6.dp))
-                        Text("Send Message", fontWeight = if (selectedTab == 0) FontWeight.Bold else FontWeight.Normal)
-                    }
-                }
-            )
-            Tab(
-                selected = selectedTab == 1,
-                onClick = { selectedTab = 1 },
-                text = {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(Icons.Default.QuestionAnswer, contentDescription = null, modifier = Modifier.size(16.dp))
-                        Spacer(modifier = Modifier.width(6.dp))
-                        Text(
-                            text = if (repliedCount > 0) "My Replies ($repliedCount)" else "My Inquiries (${userInquiries.size})",
-                            fontWeight = if (selectedTab == 1) FontWeight.Bold else FontWeight.Normal,
-                            color = if (repliedCount > 0 && selectedTab == 1) Emerald800 else if (repliedCount > 0) Gold600 else MaterialTheme.colorScheme.onSurface
-                        )
-                    }
-                }
-            )
-        }
-
-        if (selectedTab == 0) {
-            UserContactFormView(
-                initialSenderName = savedName,
-                initialSenderContact = savedContact,
-                onSubmitInquiry = { inquiry ->
-                    val newSet = (sentIds + inquiry.id).toSet()
-                    sentIds = newSet
-                    savedContact = inquiry.senderContact
-                    savedName = inquiry.senderName
-                    prefs.edit()
-                        .putStringSet("sent_inquiry_ids", newSet)
-                        .putString("last_sender_contact", inquiry.senderContact)
-                        .putString("last_sender_name", inquiry.senderName)
-                        .apply()
-                    onSubmitInquiry(inquiry)
-                },
-                onViewMyInquiries = { selectedTab = 1 }
-            )
-        } else {
-            UserInquiriesHistoryView(
-                userInquiries = userInquiries,
-                savedContact = savedContact,
-                onUpdateContactFilter = { contact ->
-                    savedContact = contact
-                    prefs.edit().putString("last_sender_contact", contact).apply()
-                },
-                onGoToSendMessage = { selectedTab = 0 }
-            )
-        }
-    }
-}
-
-@Composable
-fun UserInquiriesHistoryView(
-    userInquiries: List<AdminMessage>,
-    savedContact: String,
-    onUpdateContactFilter: (String) -> Unit,
-    onGoToSendMessage: () -> Unit,
-    modifier: Modifier = Modifier
-) {
-    var searchContactInput by remember { mutableStateOf(savedContact) }
-
-    LazyColumn(
-        modifier = modifier
-            .fillMaxSize()
-            .padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp)
-    ) {
-        // Info / Lookup Bar
-        item {
-            Card(
-                shape = RoundedCornerShape(12.dp),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)),
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Column(modifier = Modifier.padding(12.dp)) {
-                    Text(
-                        text = "Track Your Sent Inquiries & Responses",
-                        style = MaterialTheme.typography.titleSmall,
-                        fontWeight = FontWeight.Bold,
-                        color = Emerald900
-                    )
-                    Spacer(modifier = Modifier.height(4.dp))
-                    Text(
-                        text = "Inquiries sent from this app are automatically saved here. If you used a phone/email, confirm it below to find all your messages.",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                    Spacer(modifier = Modifier.height(8.dp))
                     Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalAlignment = Alignment.CenterVertically
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.weight(1f)
                     ) {
-                        OutlinedTextField(
-                            value = searchContactInput,
-                            onValueChange = { searchContactInput = it },
-                            placeholder = { Text("Enter your Phone or Email", fontSize = 12.sp) },
-                            singleLine = true,
+                        Box(
+                            contentAlignment = Alignment.Center,
                             modifier = Modifier
-                                .weight(1f)
-                                .height(50.dp)
-                        )
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Button(
-                            onClick = { onUpdateContactFilter(searchContactInput.trim()) },
-                            shape = RoundedCornerShape(8.dp),
-                            colors = ButtonDefaults.buttonColors(containerColor = Emerald800),
-                            modifier = Modifier.height(48.dp)
+                                .size(42.dp)
+                                .clip(CircleShape)
+                                .background(Gold500)
                         ) {
-                            Text("Find", fontSize = 12.sp)
+                            Icon(
+                                Icons.Default.Mosque,
+                                contentDescription = null,
+                                tint = Emerald900,
+                                modifier = Modifier.size(24.dp)
+                            )
                         }
-                    }
-                }
-            }
-        }
 
-        if (userInquiries.isEmpty()) {
-            item {
-                Card(
-                    shape = RoundedCornerShape(14.dp),
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                    elevation = CardDefaults.cardElevation(2.dp),
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(28.dp),
-                        horizontalAlignment = Alignment.CenterHorizontally
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Mail,
-                            contentDescription = null,
-                            tint = Emerald800.copy(alpha = 0.5f),
-                            modifier = Modifier.size(52.dp)
-                        )
-                        Spacer(modifier = Modifier.height(12.dp))
-                        Text(
-                            text = "No Inquiries Found Yet",
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.Bold
-                        )
-                        Spacer(modifier = Modifier.height(6.dp))
-                        Text(
-                            text = "When you submit a Dua request or question to the administration, it will be listed here along with the Admin's reply.",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            textAlign = androidx.compose.ui.text.style.TextAlign.Center
-                        )
-                        Spacer(modifier = Modifier.height(16.dp))
-                        Button(
-                            onClick = onGoToSendMessage,
-                            shape = RoundedCornerShape(10.dp),
-                            colors = ButtonDefaults.buttonColors(containerColor = Emerald800)
-                        ) {
-                            Icon(Icons.Default.Send, contentDescription = null, modifier = Modifier.size(16.dp))
-                            Spacer(modifier = Modifier.width(6.dp))
-                            Text("Send a Message / Dua")
-                        }
-                    }
-                }
-            }
-        } else {
-            items(userInquiries, key = { it.id }) { inquiry ->
-                val hasReply = inquiry.status == MessageStatus.RESOLVED && !inquiry.adminReply.isNullOrBlank()
+                        Spacer(modifier = Modifier.width(12.dp))
 
-                Card(
-                    shape = RoundedCornerShape(14.dp),
-                    colors = CardDefaults.cardColors(
-                        containerColor = if (hasReply) Emerald100.copy(alpha = 0.35f) else MaterialTheme.colorScheme.surface
-                    ),
-                    elevation = CardDefaults.cardElevation(3.dp),
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Column(modifier = Modifier.padding(16.dp)) {
-                        // Header row: Category & Status Badge
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Surface(
-                                shape = RoundedCornerShape(6.dp),
-                                color = Emerald900
-                            ) {
+                        Column {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
                                 Text(
-                                    text = inquiry.category.title.uppercase(),
-                                    color = Gold300,
-                                    fontSize = 11.sp,
+                                    text = "Alnoor Mosque Helpline",
                                     fontWeight = FontWeight.Bold,
-                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
-                                )
-                            }
-
-                            if (hasReply) {
-                                Surface(
-                                    shape = RoundedCornerShape(12.dp),
-                                    color = SuccessGreen.copy(alpha = 0.15f)
-                                ) {
-                                    Row(
-                                        verticalAlignment = Alignment.CenterVertically,
-                                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
-                                    ) {
-                                        Icon(Icons.Default.CheckCircle, contentDescription = null, tint = SuccessGreen, modifier = Modifier.size(14.dp))
-                                        Spacer(modifier = Modifier.width(4.dp))
-                                        Text("Answered", color = SuccessGreen, fontWeight = FontWeight.Bold, fontSize = 11.sp)
-                                    }
-                                }
-                            } else {
-                                Surface(
-                                    shape = RoundedCornerShape(12.dp),
-                                    color = Gold500.copy(alpha = 0.2f)
-                                ) {
-                                    Row(
-                                        verticalAlignment = Alignment.CenterVertically,
-                                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
-                                    ) {
-                                        Icon(Icons.Default.HourglassEmpty, contentDescription = null, tint = Gold600, modifier = Modifier.size(14.dp))
-                                        Spacer(modifier = Modifier.width(4.dp))
-                                        Text("Pending Review", color = Gold600, fontWeight = FontWeight.Bold, fontSize = 11.sp)
-                                    }
-                                }
-                            }
-                        }
-
-                        Spacer(modifier = Modifier.height(10.dp))
-                        Text(
-                            text = inquiry.subject,
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.onSurface
-                        )
-                        Spacer(modifier = Modifier.height(2.dp))
-                        Text(
-                            text = "Sent: ${inquiry.timestamp}",
-                            fontSize = 11.sp,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-
-                        Spacer(modifier = Modifier.height(8.dp))
-                        // User's original message quote
-                        Surface(
-                            shape = RoundedCornerShape(8.dp),
-                            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f),
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            Column(modifier = Modifier.padding(10.dp)) {
-                                Text("Your Message:", fontSize = 11.sp, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                                Spacer(modifier = Modifier.height(2.dp))
-                                Text(
-                                    text = inquiry.message,
-                                    fontSize = 13.sp,
-                                    color = MaterialTheme.colorScheme.onSurface
-                                )
-                            }
-                        }
-
-                        // --- OFFICIAL ADMIN REPLY SECTION ---
-                        Spacer(modifier = Modifier.height(12.dp))
-                        if (hasReply) {
-                            Card(
-                                shape = RoundedCornerShape(10.dp),
-                                colors = CardDefaults.cardColors(containerColor = Emerald900),
-                                modifier = Modifier.fillMaxWidth()
-                            ) {
-                                Column(modifier = Modifier.padding(12.dp)) {
-                                    Row(
-                                        verticalAlignment = Alignment.CenterVertically,
-                                        modifier = Modifier.fillMaxWidth()
-                                    ) {
-                                        Icon(
-                                            imageVector = Icons.Default.MarkEmailRead,
-                                            contentDescription = null,
-                                            tint = Gold400,
-                                            modifier = Modifier.size(18.dp)
-                                        )
-                                        Spacer(modifier = Modifier.width(6.dp))
-                                        Text(
-                                            text = "Official Reply from Administration",
-                                            color = Gold300,
-                                            fontWeight = FontWeight.Bold,
-                                            fontSize = 12.sp
-                                        )
-                                    }
-                                    Spacer(modifier = Modifier.height(6.dp))
-                                    Divider(color = Gold400.copy(alpha = 0.3f), thickness = 0.8.dp)
-                                    Spacer(modifier = Modifier.height(8.dp))
-                                    Text(
-                                        text = inquiry.adminReply ?: "",
-                                        color = Color.White,
-                                        fontSize = 14.sp,
-                                        lineHeight = 20.sp,
-                                        fontWeight = FontWeight.Normal
-                                    )
-                                }
-                            }
-                        } else {
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                modifier = Modifier.padding(vertical = 4.dp)
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.HourglassEmpty,
-                                    contentDescription = null,
-                                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    modifier = Modifier.size(14.dp)
+                                    fontSize = 16.sp,
+                                    color = Color.White
                                 )
                                 Spacer(modifier = Modifier.width(6.dp))
+                                Box(
+                                    modifier = Modifier
+                                        .size(8.dp)
+                                        .clip(CircleShape)
+                                        .background(SuccessGreen)
+                                )
+                            }
+                            Text(
+                                text = "Official 1-to-1 Support & Dua Requests",
+                                fontSize = 11.sp,
+                                color = Gold300
+                            )
+                        }
+                    }
+
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        IconButton(onClick = { showInfoDialog = true }) {
+                            Icon(
+                                Icons.Default.Info,
+                                contentDescription = "Helpline Info",
+                                tint = Gold400,
+                                modifier = Modifier.size(22.dp)
+                            )
+                        }
+
+                        IconButton(onClick = onAdminLoginPrompt) {
+                            Icon(
+                                Icons.Default.Shield,
+                                contentDescription = "Staff Login",
+                                tint = Color.White.copy(alpha = 0.8f),
+                                modifier = Modifier.size(22.dp)
+                            )
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(6.dp))
+
+                // Identity Ribbon (Shows who the user is chatting as)
+                Surface(
+                    shape = RoundedCornerShape(8.dp),
+                    color = Emerald800,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { showProfileDialog = true }
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(
+                                Icons.Default.Person,
+                                contentDescription = null,
+                                tint = Gold400,
+                                modifier = Modifier.size(14.dp)
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text(
+                                text = if (savedName.isNotBlank()) "Chatting as: $savedName ${if (savedContact.isNotBlank()) "($savedContact)" else ""}" else "Tap to set your Name & Contact (Optional)",
+                                fontSize = 11.sp,
+                                color = Color.White,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        }
+                        Icon(
+                            Icons.Default.Edit,
+                            contentDescription = "Edit Name",
+                            tint = Gold400,
+                            modifier = Modifier.size(12.dp)
+                        )
+                    }
+                }
+            }
+        }
+
+        // --- CATEGORY SELECTOR CHIPS ---
+        Surface(
+            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            LazyRow(
+                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                item {
+                    Text("Topic:", fontSize = 11.sp, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+                items(MessageCategory.values()) { category ->
+                    val isSelected = selectedCategory == category
+                    FilterChip(
+                        selected = isSelected,
+                        onClick = { selectedCategory = category },
+                        label = {
+                            Text(
+                                text = when (category) {
+                                    MessageCategory.DUA_REQUEST -> "🤲 Dua Request"
+                                    MessageCategory.MASLA_FATWA -> "📖 Masla / Ruling"
+                                    MessageCategory.EVENT_INQUIRY -> "📅 Event Query"
+                                    MessageCategory.GENERAL -> "💬 General"
+                                },
+                                fontSize = 11.sp
+                            )
+                        },
+                        colors = FilterChipDefaults.filterChipColors(
+                            selectedContainerColor = Emerald800,
+                            selectedLabelColor = Color.White,
+                            containerColor = MaterialTheme.colorScheme.surface
+                        ),
+                        shape = RoundedCornerShape(16.dp)
+                    )
+                }
+            }
+        }
+
+        // --- CHAT MESSAGE STREAM ---
+        Box(
+            modifier = Modifier
+                .weight(1f)
+                .fillMaxWidth()
+                .background(Color(0xFFF6F8F7))
+        ) {
+            if (chatBubbles.isEmpty()) {
+                // Empty state greeting card
+                Column(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(24.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.Center
+                ) {
+                    Card(
+                        shape = RoundedCornerShape(16.dp),
+                        colors = CardDefaults.cardColors(containerColor = Color.White),
+                        elevation = CardDefaults.cardElevation(2.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Column(
+                            modifier = Modifier.padding(20.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally
+                        ) {
+                            Box(
+                                contentAlignment = Alignment.Center,
+                                modifier = Modifier
+                                    .size(54.dp)
+                                    .clip(CircleShape)
+                                    .background(Emerald800.copy(alpha = 0.1f))
+                            ) {
+                                Icon(
+                                    Icons.Default.Forum,
+                                    contentDescription = null,
+                                    tint = Emerald800,
+                                    modifier = Modifier.size(28.dp)
+                                )
+                            }
+                            Spacer(modifier = Modifier.height(12.dp))
+                            Text(
+                                text = "Assalamu Alaikum wa Rahmatullah",
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 15.sp,
+                                color = Emerald900,
+                                textAlign = TextAlign.Center
+                            )
+                            Spacer(modifier = Modifier.height(6.dp))
+                            Text(
+                                text = "Welcome to the direct Alnoor Islamic Helpline thread. You can write your questions, Dua requests, or feedback below.",
+                                fontSize = 13.sp,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                textAlign = TextAlign.Center,
+                                lineHeight = 18.sp
+                            )
+                            Spacer(modifier = Modifier.height(12.dp))
+                            Surface(
+                                shape = RoundedCornerShape(8.dp),
+                                color = Gold300.copy(alpha = 0.2f)
+                            ) {
                                 Text(
-                                    text = "Awaiting response from Mosque Administration. You will be notified when replied.",
+                                    text = "🔒 Direct 1-to-1 conversation with Mosque Administration. All replies appear right here.",
                                     fontSize = 11.sp,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    color = Gold600,
+                                    fontWeight = FontWeight.Medium,
+                                    modifier = Modifier.padding(8.dp),
+                                    textAlign = TextAlign.Center
                                 )
                             }
                         }
                     }
+                }
+            } else {
+                LazyColumn(
+                    state = listState,
+                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 16.dp),
+                    verticalArrangement = Arrangement.spacedBy(10.dp),
+                    modifier = Modifier.fillMaxSize()
+                ) {
+                    item {
+                        // Date / Security Pill
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 4.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Surface(
+                                shape = RoundedCornerShape(12.dp),
+                                color = Color.White,
+                                shadowElevation = 1.dp
+                            ) {
+                                Text(
+                                    text = "🔒 Direct conversation with Alnoor Mosque",
+                                    fontSize = 11.sp,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp)
+                                )
+                            }
+                        }
+                    }
+
+                    items(chatBubbles, key = { it.id }) { bubble ->
+                        UserChatBubble(
+                            bubble = bubble,
+                            onCopy = {
+                                clipboardManager.setText(AnnotatedString(bubble.text))
+                                Toast.makeText(context, "Message copied to clipboard", Toast.LENGTH_SHORT).show()
+                            }
+                        )
+                    }
+                }
+            }
+        }
+
+        // --- BOTTOM WHATSAPP INPUT BAR ---
+        Surface(
+            color = Color.White,
+            shadowElevation = 8.dp,
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 12.dp, vertical = 10.dp),
+                verticalAlignment = Alignment.Bottom
+            ) {
+                OutlinedTextField(
+                    value = messageInput,
+                    onValueChange = { messageInput = it },
+                    placeholder = {
+                        Text(
+                            text = when (selectedCategory) {
+                                MessageCategory.DUA_REQUEST -> "Type your Dua request..."
+                                MessageCategory.MASLA_FATWA -> "Ask your question or Masla..."
+                                else -> "Type a message to Mosque Admin..."
+                            },
+                            fontSize = 13.sp
+                        )
+                    },
+                    modifier = Modifier
+                        .weight(1f)
+                        .padding(end = 8.dp),
+                    shape = RoundedCornerShape(24.dp),
+                    maxLines = 5,
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedBorderColor = Emerald800,
+                        unfocusedBorderColor = Color.LightGray.copy(alpha = 0.6f),
+                        focusedContainerColor = Color(0xFFFAFAFA),
+                        unfocusedContainerColor = Color(0xFFFAFAFA)
+                    )
+                )
+
+                Button(
+                    onClick = {
+                        if (messageInput.trim().isNotBlank()) {
+                            val textToSend = messageInput.trim()
+                            val userName = savedName.ifBlank { "Community Member" }
+                            val userContact = savedContact.ifBlank { "Not provided" }
+
+                            // Send via threaded system
+                            onSendChatMessage(
+                                effectiveThreadId,
+                                userName,
+                                userContact,
+                                textToSend,
+                                false, // isFromAdmin = false
+                                selectedCategory
+                            )
+
+                            // Save thread mapping to local prefs
+                            val newSent = sentIds.toMutableSet()
+                            newSent.add(effectiveThreadId)
+                            prefs.edit().putStringSet("sent_inquiry_ids", newSent).apply()
+                            sentIds = newSent
+
+                            messageInput = ""
+                            Toast.makeText(context, "Message delivered to Mosque Admin", Toast.LENGTH_SHORT).show()
+                        }
+                    },
+                    enabled = messageInput.trim().isNotBlank(),
+                    shape = CircleShape,
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = Emerald800,
+                        disabledContainerColor = Color.LightGray
+                    ),
+                    modifier = Modifier.size(48.dp),
+                    contentPadding = PaddingValues(0.dp)
+                ) {
+                    Icon(
+                        Icons.AutoMirrored.Filled.Send,
+                        contentDescription = "Send Message",
+                        tint = Color.White,
+                        modifier = Modifier.size(20.dp)
+                    )
                 }
             }
         }
     }
-}
 
-@Composable
-fun UserContactFormView(
-    initialSenderName: String = "",
-    initialSenderContact: String = "",
-    onSubmitInquiry: (AdminMessage) -> Unit,
-    onViewMyInquiries: () -> Unit = {},
-    modifier: Modifier = Modifier
-) {
-    var senderName by remember { mutableStateOf(initialSenderName) }
-    var senderContact by remember { mutableStateOf(initialSenderContact) }
-    var selectedCategory by remember { mutableStateOf(MessageCategory.DUA_REQUEST) }
-    var subject by remember { mutableStateOf("") }
-    var messageContent by remember { mutableStateOf("") }
-    var submittedSuccessfully by remember { mutableStateOf(false) }
+    // Edit Profile/Identity Dialog
+    if (showProfileDialog) {
+        var tempName by remember { mutableStateOf(savedName) }
+        var tempContact by remember { mutableStateOf(savedContact) }
 
-    LazyColumn(
-        modifier = modifier
-            .fillMaxSize()
-            .padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp)
-    ) {
-        if (submittedSuccessfully) {
-            item {
-                Card(
-                    shape = RoundedCornerShape(12.dp),
-                    colors = CardDefaults.cardColors(containerColor = SuccessGreen.copy(alpha = 0.15f)),
-                    modifier = Modifier.fillMaxWidth()
+        AlertDialog(
+            onDismissRequest = { showProfileDialog = false },
+            title = { Text("Your Contact Profile", fontWeight = FontWeight.Bold) },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Text(
+                        "Providing your details allows the Mosque administration to address you by name and contact you if follow-up is required.",
+                        fontSize = 12.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+
+                    OutlinedTextField(
+                        value = tempName,
+                        onValueChange = { tempName = it },
+                        label = { Text("Your Full Name") },
+                        placeholder = { Text("e.g. Muhammad Tariq") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+
+                    OutlinedTextField(
+                        value = tempContact,
+                        onValueChange = { tempContact = it },
+                        label = { Text("WhatsApp / Phone / Email") },
+                        placeholder = { Text("e.g. +92 300 1234567") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        savedName = tempName.trim()
+                        savedContact = tempContact.trim()
+                        prefs.edit()
+                            .putString("last_sender_name", savedName)
+                            .putString("last_sender_contact", savedContact)
+                            .apply()
+                        showProfileDialog = false
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = Emerald800)
                 ) {
-                    Column(modifier = Modifier.padding(16.dp)) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(Icons.Default.CheckCircle, contentDescription = null, tint = SuccessGreen, modifier = Modifier.size(24.dp))
-                            Spacer(modifier = Modifier.width(12.dp))
-                            Column {
-                                Text("JazakAllah Khair!", fontWeight = FontWeight.Bold, color = SuccessGreen)
-                                Text("Your message has been sent to Alnoor Administration.", fontSize = 12.sp)
-                            }
-                        }
-                        Spacer(modifier = Modifier.height(10.dp))
-                        Button(
-                            onClick = onViewMyInquiries,
-                            colors = ButtonDefaults.buttonColors(containerColor = Emerald800),
-                            shape = RoundedCornerShape(8.dp),
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            Icon(Icons.Default.QuestionAnswer, contentDescription = null, modifier = Modifier.size(16.dp))
-                            Spacer(modifier = Modifier.width(6.dp))
-                            Text("View My Inquiries & Track Admin Replies", color = Color.White, fontSize = 13.sp)
-                        }
-                    }
+                    Text("Save Profile")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showProfileDialog = false }) { Text("Cancel") }
+            }
+        )
+    }
+
+    // Helpline Information Dialog
+    if (showInfoDialog) {
+        AlertDialog(
+            onDismissRequest = { showInfoDialog = false },
+            title = {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Default.Mosque, contentDescription = null, tint = Emerald800)
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("Mosque Helpline", fontWeight = FontWeight.Bold)
+                }
+            },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text("• Operating Hours: Daily 9:00 AM – 9:00 PM", fontSize = 13.sp)
+                    Text("• Dua Requests: Mentioned during Friday Jummah & Weekly Khatam Sharif.", fontSize = 13.sp)
+                    Text("• Masla & Fatawa: Forwarded to qualified Islamic Scholars.", fontSize = 13.sp)
+                    Text("• Emergency Inquiries: Please visit the administration office or contact the Imam directly.", fontSize = 13.sp)
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = { showInfoDialog = false },
+                    colors = ButtonDefaults.buttonColors(containerColor = Emerald800)
+                ) {
+                    Text("Got It")
                 }
             }
-        }
+        )
+    }
+}
 
-        item {
-            Card(
-                shape = RoundedCornerShape(14.dp),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                elevation = CardDefaults.cardElevation(2.dp),
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Column(
-                    modifier = Modifier.padding(16.dp),
-                    verticalArrangement = Arrangement.spacedBy(12.dp)
-                ) {
-                    Text(
-                        text = "Send Message / Dua Request",
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold,
-                        color = Emerald900
+/**
+ * Individual WhatsApp Chat Bubble for the User Screen
+ */
+@Composable
+fun UserChatBubble(
+    bubble: ChatBubbleItem,
+    onCopy: () -> Unit
+) {
+    val isUser = !bubble.isFromAdmin
+
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = if (isUser) Arrangement.End else Arrangement.Start
+    ) {
+        Box(
+            modifier = Modifier
+                .widthIn(max = 310.dp)
+                .clip(
+                    RoundedCornerShape(
+                        topStart = 16.dp,
+                        topEnd = 16.dp,
+                        bottomStart = if (isUser) 16.dp else 4.dp,
+                        bottomEnd = if (isUser) 4.dp else 16.dp
                     )
-
-                    OutlinedTextField(
-                        value = senderName,
-                        onValueChange = { senderName = it },
-                        label = { Text("Your Full Name *") },
-                        modifier = Modifier.fillMaxWidth()
-                    )
-
-                    OutlinedTextField(
-                        value = senderContact,
-                        onValueChange = { senderContact = it },
-                        label = { Text("Contact Info (Email or Phone) *") },
-                        modifier = Modifier.fillMaxWidth()
-                    )
-
-                    Text("Inquiry Category:", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.SemiBold)
-                    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                        MessageCategory.values().forEach { category ->
-                            Surface(
-                                shape = RoundedCornerShape(8.dp),
-                                color = if (selectedCategory == category) Emerald800 else MaterialTheme.colorScheme.surfaceVariant,
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .clickable { selectedCategory = category }
-                            ) {
-                                Row(
-                                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Text(
-                                        text = category.title,
-                                        fontSize = 12.sp,
-                                        fontWeight = if (selectedCategory == category) FontWeight.Bold else FontWeight.Normal,
-                                        color = if (selectedCategory == category) Gold300 else MaterialTheme.colorScheme.onSurface
-                                    )
-                                }
-                            }
+                )
+                .background(if (isUser) Emerald800 else Color.White)
+                .clickable { onCopy() }
+                .padding(horizontal = 12.dp, vertical = 8.dp)
+        ) {
+            Column {
+                if (!isUser) {
+                    // Admin Header
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.padding(bottom = 4.dp)
+                    ) {
+                        Surface(
+                            shape = RoundedCornerShape(4.dp),
+                            color = Gold500.copy(alpha = 0.2f)
+                        ) {
+                            Text(
+                                text = "Mosque Administration",
+                                fontSize = 10.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = Gold600,
+                                modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp)
+                            )
                         }
                     }
-
-                    OutlinedTextField(
-                        value = subject,
-                        onValueChange = { subject = it },
-                        label = { Text("Subject *") },
-                        modifier = Modifier.fillMaxWidth()
+                } else if (bubble.category != MessageCategory.GENERAL) {
+                    // Category Badge for user message
+                    Text(
+                        text = bubble.category.title,
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = Gold300,
+                        modifier = Modifier.padding(bottom = 2.dp)
                     )
+                }
 
-                    OutlinedTextField(
-                        value = messageContent,
-                        onValueChange = { messageContent = it },
-                        label = { Text("Your Message / Request Details *") },
-                        minLines = 4,
-                        modifier = Modifier.fillMaxWidth()
+                // Message Text
+                Text(
+                    text = bubble.text,
+                    fontSize = 14.sp,
+                    color = if (isUser) Color.White else Color(0xFF1E293B),
+                    lineHeight = 19.sp
+                )
+
+                Spacer(modifier = Modifier.height(4.dp))
+
+                // Timestamp & Checkmark
+                Row(
+                    modifier = Modifier.align(Alignment.End),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = bubble.timestamp,
+                        fontSize = 10.sp,
+                        color = if (isUser) Color.White.copy(alpha = 0.7f) else Color.Gray
                     )
-
-                    Button(
-                        onClick = {
-                            if (senderName.isNotBlank() && subject.isNotBlank() && messageContent.isNotBlank()) {
-                                val inquiry = AdminMessage(
-                                    id = UUID.randomUUID().toString(),
-                                    senderName = senderName,
-                                    senderContact = senderContact,
-                                    category = selectedCategory,
-                                    subject = subject,
-                                    message = messageContent,
-                                    timestamp = "Today",
-                                    isRead = false,
-                                    status = MessageStatus.PENDING
-                                )
-                                onSubmitInquiry(inquiry)
-                                submittedSuccessfully = true
-                                subject = ""
-                                messageContent = ""
-                            }
-                        },
-                        shape = RoundedCornerShape(10.dp),
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = Gold500,
-                            contentColor = Emerald900
-                        ),
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(48.dp)
-                            .testTag("submit_inquiry_button")
-                    ) {
-                        Icon(Icons.Default.Send, contentDescription = "Send", modifier = Modifier.size(18.dp))
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text("Submit Message to Admin", fontWeight = FontWeight.Bold)
+                    if (isUser) {
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Icon(
+                            imageVector = Icons.Default.DoneAll,
+                            contentDescription = "Delivered",
+                            tint = if (bubble.isRead) Gold400 else Color.White.copy(alpha = 0.7f),
+                            modifier = Modifier.size(14.dp)
+                        )
                     }
                 }
             }
@@ -710,461 +915,734 @@ fun UserContactFormView(
 }
 
 /**
- * Dedicated Moderation Inbox Screen for Administrators
- * Includes viewing details, marking Read/Unread, resolving, adding internal notes, and filtering.
+ * =====================================================================
+ * ADMIN VIEW: 1-TO-1 WHATSAPP CONVERSATION THREADS MASTER-DETAIL VIEW
+ * =====================================================================
+ * Admin sees an organized inbox of User Threads. Clicking a User Thread
+ * opens the full 1-to-1 conversation where Admin replies directly in the chat!
  */
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun ModerationInboxView(
+fun AdminChatMasterView(
     inquiries: List<AdminMessage>,
+    onSendChatMessage: (threadId: String, senderName: String, senderContact: String, text: String, isFromAdmin: Boolean, category: MessageCategory) -> Unit,
     onResolveInquiry: (String, String) -> Unit,
     onMarkAsRead: (String, Boolean) -> Unit,
     onSaveInternalNotes: (String, String) -> Unit,
     onDeleteInquiry: (String) -> Unit,
+    onDeleteThread: (threadId: String, contact: String, messages: List<AdminMessage>) -> Unit,
+    onMarkThreadRead: (threadId: String, contact: String) -> Unit,
     modifier: Modifier = Modifier
 ) {
-    var selectedFilter by remember { mutableStateOf("All") }
-    var selectedCategoryFilter by remember { mutableStateOf<MessageCategory?>(null) }
-    var searchQuery by remember { mutableStateOf("") }
+    // Selected conversation thread currently being viewed by Admin (null = Inbox list)
+    var selectedThreadId by remember { mutableStateOf<String?>(null) }
 
-    var inspectingInquiry by remember { mutableStateOf<AdminMessage?>(null) }
-    var replyingInquiry by remember { mutableStateOf<AdminMessage?>(null) }
-    var editingNotesInquiry by remember { mutableStateOf<AdminMessage?>(null) }
-    var inquiryToDelete by remember { mutableStateOf<AdminMessage?>(null) }
-
-    val unreadCount = inquiries.count { !it.isRead }
-    val pendingCount = inquiries.count { it.status == MessageStatus.PENDING }
-
-    val filteredList = inquiries.filter { inquiry ->
-        val matchesStatus = when (selectedFilter) {
-            "Unread" -> !inquiry.isRead
-            "Pending" -> inquiry.status == MessageStatus.PENDING
-            "Resolved" -> inquiry.status == MessageStatus.RESOLVED
-            else -> true
-        }
-        val matchesCategory = selectedCategoryFilter == null || inquiry.category == selectedCategoryFilter
-        val matchesSearch = searchQuery.isBlank() ||
-                inquiry.subject.contains(searchQuery, ignoreCase = true) ||
-                inquiry.senderName.contains(searchQuery, ignoreCase = true) ||
-                inquiry.message.contains(searchQuery, ignoreCase = true) ||
-                (inquiry.internalNotes?.contains(searchQuery, ignoreCase = true) == true)
-
-        matchesStatus && matchesCategory && matchesSearch
+    val allThreads = remember(inquiries) {
+        buildChatThreads(inquiries)
     }
 
-    LazyColumn(
+    val currentThread = allThreads.find { it.threadId == selectedThreadId }
+
+    if (currentThread != null) {
+        // Render 1-to-1 Chat Conversation between Admin and this specific User
+        AdminOneToOneChatView(
+            thread = currentThread,
+            onBack = { selectedThreadId = null },
+            onSendReply = { text ->
+                onSendChatMessage(
+                    currentThread.threadId,
+                    "Mosque Administration",
+                    "helpline@alnoor.org",
+                    text,
+                    true, // isFromAdmin = true
+                    currentThread.category
+                )
+            },
+            onSaveStaffNotes = { notes ->
+                currentThread.messages.firstOrNull()?.let { firstMsg ->
+                    onSaveInternalNotes(firstMsg.id, notes)
+                }
+            },
+            onDeleteThread = {
+                onDeleteThread(currentThread.threadId, currentThread.userContact, currentThread.messages)
+                selectedThreadId = null
+            },
+            onMarkAsRead = {
+                onMarkThreadRead(currentThread.threadId, currentThread.userContact)
+            },
+            modifier = modifier
+        )
+    } else {
+        // Render Inbox of all User Threads (WhatsApp-style Chat List)
+        AdminChatInboxView(
+            threads = allThreads,
+            onSelectThread = { thread ->
+                onMarkThreadRead(thread.threadId, thread.userContact)
+                selectedThreadId = thread.threadId
+            },
+            onDeleteThread = { thread ->
+                onDeleteThread(thread.threadId, thread.userContact, thread.messages)
+            },
+            modifier = modifier
+        )
+    }
+}
+
+/**
+ * Admin Inbox: Lists all User Conversations (1 User = 1 Item)
+ */
+@Composable
+fun AdminChatInboxView(
+    threads: List<ChatThread>,
+    onSelectThread: (ChatThread) -> Unit,
+    onDeleteThread: (ChatThread) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    var searchQuery by remember { mutableStateOf("") }
+    var selectedFilter by remember { mutableStateOf("ALL") }
+    var threadToDelete by remember { mutableStateOf<ChatThread?>(null) }
+
+    val filteredThreads = remember(threads, searchQuery, selectedFilter) {
+        threads.filter { thread ->
+            val matchesSearch = searchQuery.isBlank() ||
+                    thread.userName.contains(searchQuery, ignoreCase = true) ||
+                    thread.userContact.contains(searchQuery, ignoreCase = true) ||
+                    thread.latestMessage.contains(searchQuery, ignoreCase = true)
+
+            val matchesFilter = when (selectedFilter) {
+                "PENDING" -> thread.isPending
+                "RESOLVED" -> !thread.isPending
+                "UNREAD" -> thread.unreadCount > 0
+                else -> true
+            }
+
+            matchesSearch && matchesFilter
+        }
+    }
+
+    val totalUnread = threads.sumOf { it.unreadCount }
+    val pendingCount = threads.count { it.isPending }
+
+    Column(
         modifier = modifier
             .fillMaxSize()
-            .padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(14.dp)
+            .background(MaterialTheme.colorScheme.background)
     ) {
-        // Moderation Inbox Header
-        item {
-            Card(
-                shape = RoundedCornerShape(16.dp),
-                colors = CardDefaults.cardColors(containerColor = Emerald900),
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Column(modifier = Modifier.padding(18.dp)) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(Icons.Default.AdminPanelSettings, contentDescription = null, tint = Gold400, modifier = Modifier.size(26.dp))
-                            Spacer(modifier = Modifier.width(8.dp))
+        // --- HEADER BANNER ---
+        Surface(
+            color = Emerald900,
+            shadowElevation = 4.dp,
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Column(modifier = Modifier.padding(16.dp)) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Column {
+                        Text(
+                            text = "Helpline & Chat Threads",
+                            style = MaterialTheme.typography.titleLarge,
+                            fontWeight = FontWeight.Bold,
+                            color = Color.White
+                        )
+                        Text(
+                            text = "${threads.size} active user conversations • $pendingCount awaiting reply",
+                            fontSize = 12.sp,
+                            color = Gold300
+                        )
+                    }
+
+                    if (totalUnread > 0) {
+                        Surface(
+                            shape = CircleShape,
+                            color = UrgentRed
+                        ) {
                             Text(
-                                text = "Moderation Inbox",
-                                style = MaterialTheme.typography.titleMedium,
+                                text = "$totalUnread NEW",
+                                fontSize = 11.sp,
                                 fontWeight = FontWeight.Bold,
-                                color = Color.White
+                                color = Color.White,
+                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
                             )
                         }
-                        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                            if (unreadCount > 0) {
-                                Surface(
-                                    shape = RoundedCornerShape(8.dp),
-                                    color = UrgentRed
-                                ) {
-                                    Text(
-                                        text = "$unreadCount Unread",
-                                        fontSize = 11.sp,
-                                        fontWeight = FontWeight.Bold,
-                                        color = Color.White,
-                                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
-                                    )
-                                }
-                            }
-                            Surface(
-                                shape = RoundedCornerShape(8.dp),
-                                color = Gold500
-                            ) {
-                                Text(
-                                    text = "$pendingCount Pending",
-                                    fontSize = 11.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    color = Emerald900,
-                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
-                                )
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(12.dp))
+
+                // Search Bar
+                OutlinedTextField(
+                    value = searchQuery,
+                    onValueChange = { searchQuery = it },
+                    placeholder = { Text("Search by user name, phone, or message...", fontSize = 13.sp) },
+                    leadingIcon = { Icon(Icons.Default.Search, contentDescription = null, tint = Gold400) },
+                    trailingIcon = {
+                        if (searchQuery.isNotBlank()) {
+                            IconButton(onClick = { searchQuery = "" }) {
+                                Icon(Icons.Default.Clear, contentDescription = "Clear", tint = Color.White)
                             }
                         }
-                    }
-                    Spacer(modifier = Modifier.height(6.dp))
-                    Text(
-                        text = "Review incoming messages, manage internal staff notes, mark read/unread, and reply to community inquiries.",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = Gold300
-                    )
-                }
+                    },
+                    singleLine = true,
+                    shape = RoundedCornerShape(12.dp),
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedTextColor = Color.White,
+                        unfocusedTextColor = Color.White,
+                        focusedBorderColor = Gold400,
+                        unfocusedBorderColor = Color.White.copy(alpha = 0.4f),
+                        focusedContainerColor = Emerald800.copy(alpha = 0.4f),
+                        unfocusedContainerColor = Emerald800.copy(alpha = 0.2f)
+                    ),
+                    modifier = Modifier.fillMaxWidth()
+                )
             }
         }
 
-        // Search in Inbox
-        item {
-            OutlinedTextField(
-                value = searchQuery,
-                onValueChange = { searchQuery = it },
-                placeholder = { Text("Search by sender, subject, keywords or notes...") },
-                leadingIcon = { Icon(Icons.Default.Search, contentDescription = "Search", tint = Emerald700) },
-                singleLine = true,
-                shape = RoundedCornerShape(12.dp),
-                modifier = Modifier.fillMaxWidth()
-            )
-        }
-
-        // Status Filter Chips
-        item {
+        // --- FILTER CHIPS ---
+        Surface(
+            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+            modifier = Modifier.fillMaxWidth()
+        ) {
             Row(
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 8.dp),
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                listOf("All", "Unread", "Pending", "Resolved").forEach { status ->
-                    FilterChip(
-                        selected = selectedFilter == status,
-                        onClick = { selectedFilter = status },
-                        label = { Text(status) },
-                        colors = FilterChipDefaults.filterChipColors(
-                            selectedContainerColor = Emerald800,
-                            selectedLabelColor = Gold300
-                        )
-                    )
-                }
+                FilterChip(
+                    selected = selectedFilter == "ALL",
+                    onClick = { selectedFilter = "ALL" },
+                    label = { Text("All (${threads.size})", fontSize = 12.sp) },
+                    colors = FilterChipDefaults.filterChipColors(selectedContainerColor = Emerald800, selectedLabelColor = Color.White)
+                )
+                FilterChip(
+                    selected = selectedFilter == "PENDING",
+                    onClick = { selectedFilter = "PENDING" },
+                    label = { Text("Pending ($pendingCount)", fontSize = 12.sp) },
+                    colors = FilterChipDefaults.filterChipColors(selectedContainerColor = Gold500, selectedLabelColor = Emerald900)
+                )
+                FilterChip(
+                    selected = selectedFilter == "UNREAD",
+                    onClick = { selectedFilter = "UNREAD" },
+                    label = { Text("Unread ($totalUnread)", fontSize = 12.sp) },
+                    colors = FilterChipDefaults.filterChipColors(selectedContainerColor = UrgentRed, selectedLabelColor = Color.White)
+                )
             }
         }
 
-        // Inquiries List
-        if (filteredList.isEmpty()) {
-            item {
-                Card(
-                    shape = RoundedCornerShape(12.dp),
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Column(
-                        modifier = Modifier.padding(32.dp),
-                        horizontalAlignment = Alignment.CenterHorizontally
-                    ) {
-                        Icon(Icons.Default.Mail, contentDescription = null, tint = Gold500, modifier = Modifier.size(36.dp))
-                        Spacer(modifier = Modifier.height(8.dp))
-                        Text("No messages match this filter", fontWeight = FontWeight.Bold)
-                        Text("All community queries are up to date.", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    }
+        // --- THREADS LIST ---
+        if (filteredThreads.isEmpty()) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(32.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Icon(
+                        Icons.Default.Forum,
+                        contentDescription = null,
+                        tint = Gold500,
+                        modifier = Modifier.size(48.dp)
+                    )
+                    Spacer(modifier = Modifier.height(12.dp))
+                    Text("No conversation threads found", fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                    Text("Incoming inquiries from users will create a dedicated thread.", fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             }
         } else {
-            items(filteredList) { inquiry ->
-                val isPending = inquiry.status == MessageStatus.PENDING
-
-                Card(
-                    shape = RoundedCornerShape(14.dp),
-                    colors = CardDefaults.cardColors(
-                        containerColor = if (!inquiry.isRead) Emerald100.copy(alpha = 0.45f) else MaterialTheme.colorScheme.surface
-                    ),
-                    elevation = CardDefaults.cardElevation(if (!inquiry.isRead) 3.dp else 1.dp),
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clickable {
-                            // View details & auto-mark read
-                            onMarkAsRead(inquiry.id, true)
-                            inspectingInquiry = inquiry
-                        }
-                ) {
-                    Column(modifier = Modifier.padding(16.dp)) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(6.dp)
-                            ) {
-                                Surface(
-                                    shape = RoundedCornerShape(6.dp),
-                                    color = if (isPending) Gold500.copy(alpha = 0.2f) else SuccessGreen.copy(alpha = 0.2f)
-                                ) {
-                                    Row(
-                                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
-                                        verticalAlignment = Alignment.CenterVertically
-                                    ) {
-                                        Icon(
-                                            imageVector = if (isPending) Icons.Default.HourglassEmpty else Icons.Default.CheckCircle,
-                                            contentDescription = null,
-                                            tint = if (isPending) Gold600 else SuccessGreen,
-                                            modifier = Modifier.size(14.dp)
-                                        )
-                                        Spacer(modifier = Modifier.width(4.dp))
-                                        Text(
-                                            text = inquiry.status.name,
-                                            fontSize = 11.sp,
-                                            fontWeight = FontWeight.Bold,
-                                            color = if (isPending) Gold600 else SuccessGreen
-                                        )
-                                    }
-                                }
-
-                                if (!inquiry.isRead) {
-                                    Surface(
-                                        shape = RoundedCornerShape(6.dp),
-                                        color = UrgentRed
-                                    ) {
-                                        Text(
-                                            text = "UNREAD",
-                                            fontSize = 10.sp,
-                                            fontWeight = FontWeight.Bold,
-                                            color = Color.White,
-                                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
-                                        )
-                                    }
-                                }
-                            }
-
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                IconButton(
-                                    onClick = { onMarkAsRead(inquiry.id, !inquiry.isRead) },
-                                    modifier = Modifier.size(28.dp)
-                                ) {
-                                    Icon(
-                                        imageVector = if (inquiry.isRead) Icons.Default.MarkEmailUnread else Icons.Default.MarkEmailRead,
-                                        contentDescription = if (inquiry.isRead) "Mark Unread" else "Mark Read",
-                                        tint = Emerald800,
-                                        modifier = Modifier.size(18.dp)
-                                    )
-                                }
-
-                                IconButton(
-                                    onClick = { inquiryToDelete = inquiry },
-                                    modifier = Modifier.size(28.dp)
-                                ) {
-                                    Icon(Icons.Default.Delete, contentDescription = "Delete", tint = UrgentRed, modifier = Modifier.size(18.dp))
-                                }
-                            }
-                        }
-
-                        Spacer(modifier = Modifier.height(8.dp))
-
-                        Text(
-                            text = inquiry.subject,
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = if (!inquiry.isRead) FontWeight.ExtraBold else FontWeight.SemiBold
-                        )
-
-                        Spacer(modifier = Modifier.height(4.dp))
-
-                        Text(
-                            text = "From: ${inquiry.senderName} (${inquiry.senderContact})",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-
-                        Text(
-                            text = "Category: ${inquiry.category.title} • Date: ${inquiry.timestamp}",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = Gold600,
-                            fontWeight = FontWeight.SemiBold
-                        )
-
-                        Spacer(modifier = Modifier.height(8.dp))
-
-                        Surface(
-                            shape = RoundedCornerShape(8.dp),
-                            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.7f),
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            Text(
-                                text = inquiry.message,
-                                style = MaterialTheme.typography.bodySmall,
-                                maxLines = 3,
-                                overflow = TextOverflow.Ellipsis,
-                                modifier = Modifier.padding(10.dp)
-                            )
-                        }
-
-                        // Internal Admin Notes display
-                        if (!inquiry.internalNotes.isNullOrBlank()) {
-                            Spacer(modifier = Modifier.height(8.dp))
-                            Surface(
-                                shape = RoundedCornerShape(8.dp),
-                                color = Gold300.copy(alpha = 0.2f),
-                                modifier = Modifier.fillMaxWidth()
-                            ) {
-                                Row(
-                                    modifier = Modifier.padding(8.dp),
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Icon(Icons.Default.EditNote, contentDescription = null, tint = Gold600, modifier = Modifier.size(16.dp))
-                                    Spacer(modifier = Modifier.width(6.dp))
-                                    Column {
-                                        Text("Staff Note:", fontWeight = FontWeight.Bold, fontSize = 11.sp, color = Gold600)
-                                        Text(inquiry.internalNotes, fontSize = 11.sp)
-                                    }
-                                }
-                            }
-                        }
-
-                        // Admin Reply display
-                        if (inquiry.adminReply != null) {
-                            Spacer(modifier = Modifier.height(8.dp))
-                            Surface(
-                                shape = RoundedCornerShape(8.dp),
-                                color = Emerald800.copy(alpha = 0.12f),
-                                modifier = Modifier.fillMaxWidth()
-                            ) {
-                                Column(modifier = Modifier.padding(10.dp)) {
-                                    Text("Official Admin Reply:", fontWeight = FontWeight.Bold, fontSize = 11.sp, color = Emerald800)
-                                    Spacer(modifier = Modifier.height(2.dp))
-                                    Text(inquiry.adminReply, fontSize = 12.sp)
-                                }
-                            }
-                        }
-
-                        Spacer(modifier = Modifier.height(10.dp))
-
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(8.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            OutlinedButton(
-                                onClick = { editingNotesInquiry = inquiry },
-                                shape = RoundedCornerShape(8.dp),
-                                modifier = Modifier
-                                    .weight(1f)
-                                    .height(34.dp)
-                            ) {
-                                Icon(Icons.Default.EditNote, contentDescription = "Notes", modifier = Modifier.size(14.dp))
-                                Spacer(modifier = Modifier.width(4.dp))
-                                Text("Add Note", fontSize = 11.sp)
-                            }
-
-                            Button(
-                                onClick = { replyingInquiry = inquiry },
-                                shape = RoundedCornerShape(8.dp),
-                                colors = ButtonDefaults.buttonColors(
-                                    containerColor = if (isPending) Gold500 else Emerald800,
-                                    contentColor = if (isPending) Emerald900 else Color.White
-                                ),
-                                modifier = Modifier
-                                    .weight(1.2f)
-                                    .height(34.dp)
-                            ) {
-                                Icon(Icons.Default.QuestionAnswer, contentDescription = "Reply", modifier = Modifier.size(14.dp))
-                                Spacer(modifier = Modifier.width(4.dp))
-                                Text(if (isPending) "Reply & Resolve" else "Update Reply", fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                            }
-                        }
-                    }
+            LazyColumn(
+                contentPadding = PaddingValues(12.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+                modifier = Modifier.fillMaxSize()
+            ) {
+                items(filteredThreads, key = { it.threadId }) { thread ->
+                    AdminThreadCard(
+                        thread = thread,
+                        onClick = { onSelectThread(thread) },
+                        onDelete = { threadToDelete = thread }
+                    )
                 }
             }
         }
     }
 
-    // Message Details Modal Dialog
-    inspectingInquiry?.let { inquiry ->
+    // Delete Thread Confirmation Dialog
+    threadToDelete?.let { thread ->
         AlertDialog(
-            onDismissRequest = { inspectingInquiry = null },
-            title = {
-                Text(
-                    text = inquiry.subject,
-                    fontWeight = FontWeight.Bold,
-                    style = MaterialTheme.typography.titleMedium
-                )
-            },
-            text = {
-                Column(
-                    verticalArrangement = Arrangement.spacedBy(10.dp),
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Text("From: ${inquiry.senderName} (${inquiry.senderContact})", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    Text("Category: ${inquiry.category.title}", fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = Emerald700)
-                    Text("Date: ${inquiry.timestamp}", fontSize = 12.sp)
-
-                    Divider()
-
-                    Text("Message Content:", fontWeight = FontWeight.Bold, fontSize = 12.sp)
-                    Surface(
-                        shape = RoundedCornerShape(8.dp),
-                        color = MaterialTheme.colorScheme.surfaceVariant,
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Text(inquiry.message, fontSize = 13.sp, modifier = Modifier.padding(10.dp))
-                    }
-
-                    if (!inquiry.internalNotes.isNullOrBlank()) {
-                        Text("Internal Staff Notes:", fontWeight = FontWeight.Bold, fontSize = 12.sp, color = Gold600)
-                        Surface(
-                            shape = RoundedCornerShape(8.dp),
-                            color = Gold300.copy(alpha = 0.2f),
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            Text(inquiry.internalNotes, fontSize = 12.sp, modifier = Modifier.padding(10.dp))
-                        }
-                    }
-
-                    if (inquiry.adminReply != null) {
-                        Text("Admin Reply:", fontWeight = FontWeight.Bold, fontSize = 12.sp, color = Emerald800)
-                        Surface(
-                            shape = RoundedCornerShape(8.dp),
-                            color = Emerald800.copy(alpha = 0.15f),
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            Text(inquiry.adminReply, fontSize = 12.sp, modifier = Modifier.padding(10.dp))
-                        }
-                    }
-                }
-            },
+            onDismissRequest = { threadToDelete = null },
+            title = { Text("Delete Conversation?", fontWeight = FontWeight.Bold) },
+            text = { Text("Are you sure you want to delete the entire conversation history with ${thread.userName}? All ${thread.messages.size} messages will be permanently removed.") },
             confirmButton = {
                 Button(
                     onClick = {
-                        replyingInquiry = inquiry
-                        inspectingInquiry = null
+                        onDeleteThread(thread)
+                        threadToDelete = null
                     },
-                    colors = ButtonDefaults.buttonColors(containerColor = Emerald800)
+                    colors = ButtonDefaults.buttonColors(containerColor = UrgentRed)
                 ) {
-                    Text("Reply to Message")
+                    Text("Delete Thread")
                 }
             },
             dismissButton = {
-                TextButton(onClick = { inspectingInquiry = null }) { Text("Close") }
+                TextButton(onClick = { threadToDelete = null }) { Text("Cancel") }
             }
         )
     }
+}
 
-    // Internal Notes Dialog
-    editingNotesInquiry?.let { inquiry ->
-        var notesText by remember { mutableStateOf(inquiry.internalNotes ?: "") }
+/**
+ * Single User Thread Card in the Admin Inbox (WhatsApp-style list item)
+ */
+@Composable
+fun AdminThreadCard(
+    thread: ChatThread,
+    onClick: () -> Unit,
+    onDelete: () -> Unit
+) {
+    Card(
+        shape = RoundedCornerShape(14.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = if (thread.unreadCount > 0) Emerald800.copy(alpha = 0.08f) else Color.White
+        ),
+        elevation = CardDefaults.cardElevation(if (thread.unreadCount > 0) 3.dp else 1.dp),
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable { onClick() }
+    ) {
+        Row(
+            modifier = Modifier.padding(14.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            // User Avatar Circle
+            Box(
+                contentAlignment = Alignment.Center,
+                modifier = Modifier
+                    .size(46.dp)
+                    .clip(CircleShape)
+                    .background(
+                        if (thread.unreadCount > 0) Emerald800 else Emerald800.copy(alpha = 0.15f)
+                    )
+            ) {
+                Text(
+                    text = thread.userName.take(1).uppercase().ifBlank { "U" },
+                    fontSize = 18.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = if (thread.unreadCount > 0) Color.White else Emerald800
+                )
+            }
+
+            Spacer(modifier = Modifier.width(12.dp))
+
+            // Thread Details
+            Column(modifier = Modifier.weight(1f)) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = thread.userName,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 15.sp,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                    Text(
+                        text = thread.latestTimestamp,
+                        fontSize = 11.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(2.dp))
+
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Surface(
+                        shape = RoundedCornerShape(4.dp),
+                        color = when (thread.category) {
+                            MessageCategory.DUA_REQUEST -> Gold300.copy(alpha = 0.3f)
+                            MessageCategory.MASLA_FATWA -> Emerald800.copy(alpha = 0.15f)
+                            else -> MaterialTheme.colorScheme.surfaceVariant
+                        }
+                    ) {
+                        Text(
+                            text = thread.category.title,
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = when (thread.category) {
+                                MessageCategory.DUA_REQUEST -> Gold600
+                                MessageCategory.MASLA_FATWA -> Emerald800
+                                else -> MaterialTheme.colorScheme.onSurfaceVariant
+                            },
+                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                        )
+                    }
+
+                    if (thread.userContact.isNotBlank() && thread.userContact != "Not provided") {
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(
+                            text = "• ${thread.userContact}",
+                            fontSize = 11.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(4.dp))
+
+                // Latest Message Snippet
+                Text(
+                    text = thread.latestMessage,
+                    fontSize = 13.sp,
+                    color = if (thread.unreadCount > 0) Color.Black else Color.Gray,
+                    fontWeight = if (thread.unreadCount > 0) FontWeight.SemiBold else FontWeight.Normal,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+
+            Spacer(modifier = Modifier.width(8.dp))
+
+            // Badges & Action
+            Column(
+                horizontalAlignment = Alignment.End,
+                verticalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                if (thread.unreadCount > 0) {
+                    Surface(
+                        shape = CircleShape,
+                        color = Emerald800
+                    ) {
+                        Text(
+                            text = "${thread.unreadCount}",
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = Color.White,
+                            modifier = Modifier.padding(horizontal = 7.dp, vertical = 2.dp)
+                        )
+                    }
+                } else if (thread.isPending) {
+                    Surface(
+                        shape = RoundedCornerShape(6.dp),
+                        color = Gold500.copy(alpha = 0.2f)
+                    ) {
+                        Text(
+                            text = "PENDING",
+                            fontSize = 9.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = Gold600,
+                            modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp)
+                        )
+                    }
+                } else {
+                    Icon(
+                        Icons.Default.CheckCircle,
+                        contentDescription = "Resolved",
+                        tint = SuccessGreen,
+                        modifier = Modifier.size(16.dp)
+                    )
+                }
+
+                IconButton(
+                    onClick = onDelete,
+                    modifier = Modifier.size(24.dp)
+                ) {
+                    Icon(
+                        Icons.Default.Delete,
+                        contentDescription = "Delete Thread",
+                        tint = UrgentRed.copy(alpha = 0.7f),
+                        modifier = Modifier.size(16.dp)
+                    )
+                }
+            }
+        }
+    }
+}
+
+/**
+ * =====================================================================
+ * ADMIN 1-TO-1 CHAT VIEW (Admin conversing directly with User)
+ * =====================================================================
+ */
+@Composable
+fun AdminOneToOneChatView(
+    thread: ChatThread,
+    onBack: () -> Unit,
+    onSendReply: (String) -> Unit,
+    onSaveStaffNotes: (String) -> Unit,
+    onDeleteThread: () -> Unit,
+    onMarkAsRead: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val context = LocalContext.current
+    val clipboardManager = LocalClipboardManager.current
+    val listState = rememberLazyListState()
+
+    var replyInput by remember { mutableStateOf("") }
+    var showNotesDialog by remember { mutableStateOf(false) }
+    var showDeleteConfirm by remember { mutableStateOf(false) }
+
+    val chatBubbles = remember(thread.messages) {
+        buildChatBubbles(thread.messages)
+    }
+
+    LaunchedEffect(chatBubbles.size) {
+        if (chatBubbles.isNotEmpty()) {
+            listState.animateScrollToItem(chatBubbles.size - 1)
+        }
+    }
+
+    Column(
+        modifier = modifier
+            .fillMaxSize()
+            .background(MaterialTheme.colorScheme.background)
+    ) {
+        // --- TOP CONVERSATION BAR ---
+        Surface(
+            color = Emerald900,
+            shadowElevation = 4.dp,
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 8.dp, vertical = 10.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                IconButton(onClick = onBack) {
+                    Icon(
+                        Icons.AutoMirrored.Filled.ArrowBack,
+                        contentDescription = "Back to Inbox",
+                        tint = Color.White
+                    )
+                }
+
+                Box(
+                    contentAlignment = Alignment.Center,
+                    modifier = Modifier
+                        .size(38.dp)
+                        .clip(CircleShape)
+                        .background(Gold500)
+                ) {
+                    Text(
+                        text = thread.userName.take(1).uppercase(),
+                        fontWeight = FontWeight.Bold,
+                        color = Emerald900,
+                        fontSize = 16.sp
+                    )
+                }
+
+                Spacer(modifier = Modifier.width(10.dp))
+
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = thread.userName,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 15.sp,
+                        color = Color.White,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                    Text(
+                        text = if (thread.userContact.isNotBlank() && thread.userContact != "Not provided") thread.userContact else "No contact provided",
+                        fontSize = 11.sp,
+                        color = Gold300,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+
+                // Phone Call Action (If user provided contact)
+                if (thread.userContact.isNotBlank() && thread.userContact.any { it.isDigit() }) {
+                    IconButton(
+                        onClick = {
+                            try {
+                                val intent = Intent(Intent.ACTION_DIAL, Uri.parse("tel:${thread.userContact}"))
+                                context.startActivity(intent)
+                            } catch (e: Exception) {
+                                Toast.makeText(context, "Could not launch phone dialer", Toast.LENGTH_SHORT).show()
+                            }
+                        }
+                    ) {
+                        Icon(Icons.Default.Call, contentDescription = "Call User", tint = Color.White)
+                    }
+                }
+
+                // Staff Notes Button
+                IconButton(onClick = { showNotesDialog = true }) {
+                    Icon(
+                        Icons.Default.EditNote,
+                        contentDescription = "Internal Staff Notes",
+                        tint = if (!thread.internalNotes.isNullOrBlank()) Gold400 else Color.White.copy(alpha = 0.8f)
+                    )
+                }
+
+                // Delete Thread Button
+                IconButton(onClick = { showDeleteConfirm = true }) {
+                    Icon(Icons.Default.Delete, contentDescription = "Delete Conversation", tint = UrgentRed)
+                }
+            }
+        }
+
+        // Internal Staff Note Banner (if present)
+        if (!thread.internalNotes.isNullOrBlank()) {
+            Surface(
+                color = Gold300.copy(alpha = 0.25f),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Row(
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(Icons.Default.EditNote, contentDescription = null, tint = Gold600, modifier = Modifier.size(16.dp))
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = "Staff Note: ${thread.internalNotes}",
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Medium,
+                        color = Gold600,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f)
+                    )
+                    TextButton(
+                        onClick = { showNotesDialog = true },
+                        contentPadding = PaddingValues(0.dp)
+                    ) {
+                        Text("Edit", fontSize = 11.sp, color = Gold600, fontWeight = FontWeight.Bold)
+                    }
+                }
+            }
+        }
+
+        // --- CHAT BUBBLES STREAM ---
+        Box(
+            modifier = Modifier
+                .weight(1f)
+                .fillMaxWidth()
+                .background(Color(0xFFF1F5F3))
+        ) {
+            LazyColumn(
+                state = listState,
+                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 14.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp),
+                modifier = Modifier.fillMaxSize()
+            ) {
+                items(chatBubbles, key = { it.id }) { bubble ->
+                    AdminChatBubble(
+                        bubble = bubble,
+                        userName = thread.userName,
+                        onCopy = {
+                            clipboardManager.setText(AnnotatedString(bubble.text))
+                            Toast.makeText(context, "Copied to clipboard", Toast.LENGTH_SHORT).show()
+                        }
+                    )
+                }
+            }
+        }
+
+        // --- QUICK REPLY TEMPLATE CHIPS ---
+        Surface(
+            color = Color(0xFFE2E8F0).copy(alpha = 0.6f),
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            LazyRow(
+                contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                item {
+                    Text("Quick:", fontSize = 11.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 6.dp))
+                }
+                item {
+                    TemplateChip("Assalamu Alaikum wa Rahmatullah") { replyInput = it }
+                }
+                item {
+                    TemplateChip("Ameen, Dua has been recorded in Khatam Sharif.") { replyInput = it }
+                }
+                item {
+                    TemplateChip("JazakAllah Khair for reaching out.") { replyInput = it }
+                }
+                item {
+                    TemplateChip("Forwarded to Mufti Sahab for review.") { replyInput = it }
+                }
+            }
+        }
+
+        // --- BOTTOM REPLY INPUT BAR ---
+        Surface(
+            color = Color.White,
+            shadowElevation = 8.dp,
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 12.dp, vertical = 10.dp),
+                verticalAlignment = Alignment.Bottom
+            ) {
+                OutlinedTextField(
+                    value = replyInput,
+                    onValueChange = { replyInput = it },
+                    placeholder = { Text("Type reply to ${thread.userName}...", fontSize = 13.sp) },
+                    modifier = Modifier
+                        .weight(1f)
+                        .padding(end = 8.dp),
+                    shape = RoundedCornerShape(24.dp),
+                    maxLines = 5,
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedBorderColor = Emerald800,
+                        unfocusedBorderColor = Color.LightGray.copy(alpha = 0.6f),
+                        focusedContainerColor = Color(0xFFFAFAFA),
+                        unfocusedContainerColor = Color(0xFFFAFAFA)
+                    )
+                )
+
+                Button(
+                    onClick = {
+                        if (replyInput.trim().isNotBlank()) {
+                            onSendReply(replyInput.trim())
+                            replyInput = ""
+                            Toast.makeText(context, "Reply sent to ${thread.userName}", Toast.LENGTH_SHORT).show()
+                        }
+                    },
+                    enabled = replyInput.trim().isNotBlank(),
+                    shape = CircleShape,
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = Emerald800,
+                        disabledContainerColor = Color.LightGray
+                    ),
+                    modifier = Modifier.size(48.dp),
+                    contentPadding = PaddingValues(0.dp)
+                ) {
+                    Icon(
+                        Icons.AutoMirrored.Filled.Send,
+                        contentDescription = "Send Reply",
+                        tint = Color.White,
+                        modifier = Modifier.size(20.dp)
+                    )
+                }
+            }
+        }
+    }
+
+    // Staff Notes Dialog
+    if (showNotesDialog) {
+        var tempNotes by remember { mutableStateOf(thread.internalNotes ?: "") }
 
         AlertDialog(
-            onDismissRequest = { editingNotesInquiry = null },
-            title = { Text("Internal Admin Note", fontWeight = FontWeight.Bold) },
+            onDismissRequest = { showNotesDialog = false },
+            title = { Text("Staff Private Notes", fontWeight = FontWeight.Bold) },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text("Add private notes visible only to Alnoor administrators:", fontSize = 12.sp)
+                    Text("These notes are internal and visible only to Alnoor Mosque administrators:", fontSize = 12.sp)
                     OutlinedTextField(
-                        value = notesText,
-                        onValueChange = { notesText = it },
-                        placeholder = { Text("e.g. Forwarded to Mufti Sahab; scheduled for Sunday Khutbah.") },
+                        value = tempNotes,
+                        onValueChange = { tempNotes = it },
+                        placeholder = { Text("e.g. Discussed with Mufti Sahab; Dua will be made after Asr prayer.") },
                         minLines = 3,
                         modifier = Modifier.fillMaxWidth()
                     )
@@ -1173,8 +1651,8 @@ fun ModerationInboxView(
             confirmButton = {
                 Button(
                     onClick = {
-                        onSaveInternalNotes(inquiry.id, notesText)
-                        editingNotesInquiry = null
+                        onSaveStaffNotes(tempNotes)
+                        showNotesDialog = false
                     },
                     colors = ButtonDefaults.buttonColors(containerColor = Emerald800)
                 ) {
@@ -1182,63 +1660,22 @@ fun ModerationInboxView(
                 }
             },
             dismissButton = {
-                TextButton(onClick = { editingNotesInquiry = null }) { Text("Cancel") }
+                TextButton(onClick = { showNotesDialog = false }) { Text("Cancel") }
             }
         )
     }
 
-    // Reply Dialog (Admin)
-    replyingInquiry?.let { inquiry ->
-        var replyText by remember {
-            mutableStateOf(
-                inquiry.adminReply
-                    ?: "Assalamu Alaikum wa Rahmatullah. JazakAllah Khair for reaching out. We have registered your request and prayed for your family."
-            )
-        }
-
+    // Delete Confirmation Dialog
+    if (showDeleteConfirm) {
         AlertDialog(
-            onDismissRequest = { replyingInquiry = null },
-            title = { Text("Reply to ${inquiry.senderName}", fontWeight = FontWeight.Bold) },
-            text = {
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text("Subject: ${inquiry.subject}", fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
-                    OutlinedTextField(
-                        value = replyText,
-                        onValueChange = { replyText = it },
-                        label = { Text("Admin Response") },
-                        minLines = 4,
-                        modifier = Modifier.fillMaxWidth()
-                    )
-                }
-            },
+            onDismissRequest = { showDeleteConfirm = false },
+            title = { Text("Delete Entire Conversation?", fontWeight = FontWeight.Bold) },
+            text = { Text("Are you sure you want to permanently delete all messages with ${thread.userName}?") },
             confirmButton = {
                 Button(
                     onClick = {
-                        onResolveInquiry(inquiry.id, replyText)
-                        replyingInquiry = null
-                    },
-                    colors = ButtonDefaults.buttonColors(containerColor = Emerald800)
-                ) {
-                    Text("Send & Mark Resolved")
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { replyingInquiry = null }) { Text("Cancel") }
-            }
-        )
-    }
-
-    // Delete Dialog (Admin)
-    inquiryToDelete?.let { inquiry ->
-        AlertDialog(
-            onDismissRequest = { inquiryToDelete = null },
-            title = { Text("Delete Inquiry?") },
-            text = { Text("Are you sure you want to delete message from ${inquiry.senderName}?") },
-            confirmButton = {
-                Button(
-                    onClick = {
-                        onDeleteInquiry(inquiry.id)
-                        inquiryToDelete = null
+                        onDeleteThread()
+                        showDeleteConfirm = false
                     },
                     colors = ButtonDefaults.buttonColors(containerColor = UrgentRed)
                 ) {
@@ -1246,8 +1683,115 @@ fun ModerationInboxView(
                 }
             },
             dismissButton = {
-                TextButton(onClick = { inquiryToDelete = null }) { Text("Cancel") }
+                TextButton(onClick = { showDeleteConfirm = false }) { Text("Cancel") }
             }
+        )
+    }
+}
+
+/**
+ * Bubble rendered inside the Admin's view:
+ * Admin's responses are on the right (Emerald), User messages are on the left (White).
+ */
+@Composable
+fun AdminChatBubble(
+    bubble: ChatBubbleItem,
+    userName: String,
+    onCopy: () -> Unit
+) {
+    val isAdmin = bubble.isFromAdmin
+
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = if (isAdmin) Arrangement.End else Arrangement.Start
+    ) {
+        Box(
+            modifier = Modifier
+                .widthIn(max = 310.dp)
+                .clip(
+                    RoundedCornerShape(
+                        topStart = 16.dp,
+                        topEnd = 16.dp,
+                        bottomStart = if (isAdmin) 16.dp else 4.dp,
+                        bottomEnd = if (isAdmin) 4.dp else 16.dp
+                    )
+                )
+                .background(if (isAdmin) Emerald800 else Color.White)
+                .clickable { onCopy() }
+                .padding(horizontal = 12.dp, vertical = 8.dp)
+        ) {
+            Column {
+                if (!isAdmin) {
+                    // User Header
+                    Text(
+                        text = userName,
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = Emerald800,
+                        modifier = Modifier.padding(bottom = 2.dp)
+                    )
+                } else {
+                    // Admin badge
+                    Text(
+                        text = "You (Mosque Administration)",
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = Gold300,
+                        modifier = Modifier.padding(bottom = 2.dp)
+                    )
+                }
+
+                Text(
+                    text = bubble.text,
+                    fontSize = 14.sp,
+                    color = if (isAdmin) Color.White else Color(0xFF1E293B),
+                    lineHeight = 19.sp
+                )
+
+                Spacer(modifier = Modifier.height(4.dp))
+
+                Row(
+                    modifier = Modifier.align(Alignment.End),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = bubble.timestamp,
+                        fontSize = 10.sp,
+                        color = if (isAdmin) Color.White.copy(alpha = 0.7f) else Color.Gray
+                    )
+                    if (isAdmin) {
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Icon(
+                            imageVector = Icons.Default.DoneAll,
+                            contentDescription = "Delivered",
+                            tint = Gold400,
+                            modifier = Modifier.size(14.dp)
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+/**
+ * Quick Template Chip for Admin
+ */
+@Composable
+fun TemplateChip(
+    text: String,
+    onClick: (String) -> Unit
+) {
+    Surface(
+        shape = RoundedCornerShape(14.dp),
+        color = Color.White,
+        modifier = Modifier.clickable { onClick(text) }
+    ) {
+        Text(
+            text = text,
+            fontSize = 11.sp,
+            color = Emerald900,
+            modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
         )
     }
 }

@@ -217,13 +217,30 @@ data class AdminMessage(
     val id: String,
     val senderName: String,
     val senderContact: String,
-    val category: MessageCategory,
-    val subject: String,
+    val category: MessageCategory = MessageCategory.GENERAL,
+    val subject: String = "Message",
     val message: String,
     val timestamp: String,
     val status: MessageStatus = MessageStatus.PENDING,
     val isRead: Boolean = false,
     val adminReply: String? = null,
+    val internalNotes: String? = null,
+    val isFromAdmin: Boolean = false,
+    val threadId: String = "",
+    val createdAt: Long = System.currentTimeMillis()
+)
+
+data class ChatThread(
+    val threadId: String,
+    val userName: String,
+    val userContact: String,
+    val category: MessageCategory,
+    val latestMessage: String,
+    val latestTimestamp: String,
+    val latestCreatedAt: Long,
+    val unreadCount: Int,
+    val isPending: Boolean,
+    val messages: List<AdminMessage>,
     val internalNotes: String? = null
 )
 

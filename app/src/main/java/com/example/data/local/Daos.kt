@@ -65,7 +65,7 @@ interface BookmarksDao {
 
 @Dao
 interface InquiriesDao {
-    @Query("SELECT * FROM user_inquiries ORDER BY createdAt DESC")
+    @Query("SELECT * FROM user_inquiries ORDER BY createdAt ASC")
     fun getAllInquiries(): Flow<List<UserInquiryEntity>>
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
@@ -89,11 +89,17 @@ interface InquiriesDao {
     @Query("UPDATE user_inquiries SET isRead = :isRead WHERE id = :id")
     suspend fun updateReadStatus(id: String, isRead: Boolean)
 
+    @Query("UPDATE user_inquiries SET isRead = :isRead WHERE threadId = :threadId OR senderContact = :contact")
+    suspend fun updateThreadReadStatus(threadId: String, contact: String, isRead: Boolean)
+
     @Query("UPDATE user_inquiries SET internalNotes = :notes WHERE id = :id")
     suspend fun updateInternalNotes(id: String, notes: String)
 
     @Query("DELETE FROM user_inquiries WHERE id = :id")
     suspend fun deleteInquiry(id: String)
+
+    @Query("DELETE FROM user_inquiries WHERE threadId = :threadId OR senderContact = :contact")
+    suspend fun deleteThread(threadId: String, contact: String)
 
     @androidx.room.Transaction
     suspend fun syncInquiriesWithCloud(inquiries: List<UserInquiryEntity>) {

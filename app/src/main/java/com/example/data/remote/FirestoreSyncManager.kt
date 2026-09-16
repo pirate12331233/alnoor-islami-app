@@ -1131,6 +1131,9 @@ class FirestoreSyncManager private constructor() {
                     put("reply", stringField(inquiry.adminReply ?: ""))
                     put("isRead", booleanField(inquiry.isRead))
                     put("internalNotes", stringField(inquiry.internalNotes ?: ""))
+                    put("isFromAdmin", booleanField(inquiry.isFromAdmin))
+                    put("threadId", stringField(inquiry.threadId))
+                    put("createdAt", intField(inquiry.createdAt))
                 }
                 saveDocument("user_inquiries", inquiry.id, fields)
                 touchManifest("inquiries", scope)
@@ -1605,7 +1608,10 @@ class FirestoreSyncManager private constructor() {
             status = getStringValue(fields, "status", "PENDING"),
             reply = getStringValue(fields, "reply").ifBlank { null },
             isRead = getBooleanValue(fields, "isRead", false),
-            internalNotes = getStringValue(fields, "internalNotes").ifBlank { null }
+            internalNotes = getStringValue(fields, "internalNotes").ifBlank { null },
+            isFromAdmin = getBooleanValue(fields, "isFromAdmin", false),
+            threadId = getStringValue(fields, "threadId", ""),
+            createdAt = getLongValue(fields, "createdAt", System.currentTimeMillis())
         )
     }
 

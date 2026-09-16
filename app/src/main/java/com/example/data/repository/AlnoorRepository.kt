@@ -653,7 +653,10 @@ class AlnoorRepository private constructor(private val context: Context) {
                         status = try { MessageStatus.valueOf(entity.status) } catch (_: Exception) { MessageStatus.PENDING },
                         isRead = entity.isRead,
                         adminReply = entity.reply,
-                        internalNotes = entity.internalNotes
+                        internalNotes = entity.internalNotes,
+                        isFromAdmin = entity.isFromAdmin,
+                        threadId = entity.threadId,
+                        createdAt = entity.createdAt
                     )
                 }
                 _messages.value = list
@@ -1495,18 +1498,37 @@ class AlnoorRepository private constructor(private val context: Context) {
     }
 
     // --- Messages & Inquiries (Persisted to Room & Real-time Cloud Sync) ---
-    fun submitUserMessage(senderName: String, senderContact: String, category: MessageCategory, subject: String, messageText: String) {
+    fun sendChatMessage(
+        threadId: String,
+        senderName: String,
+        senderContact: String,
+        text: String,
+        isFromAdmin: Boolean,
+        category: MessageCategory = MessageCategory.GENERAL,
+        subject: String = "Chat Message"
+    ) {
         val dateFormat = SimpleDateFormat("MMM dd, yyyy - hh:mm a", Locale.getDefault())
+        val cleanThreadId = threadId.ifBlank {
+            val contactKey = senderContact.trim().lowercase().filter { it.isLetterOrDigit() }
+            if (contactKey.isNotBlank() && contactKey != "notprovided") "contact_$contactKey"
+            else "user_${UUID.randomUUID().toString().take(8)}"
+        }
+
         val newMessage = AdminMessage(
             id = UUID.randomUUID().toString(),
-            senderName = senderName.ifBlank { "Community Member" },
+            senderName = senderName.ifBlank { if (isFromAdmin) "Mosque Administration" else "Community Member" },
             senderContact = senderContact.ifBlank { "Not provided" },
             category = category,
-            subject = subject.ifBlank { "General Inquiry" },
-            message = messageText.ifBlank { "Empty message" },
+            subject = subject,
+            message = text.trim(),
             timestamp = dateFormat.format(Date()),
-            status = MessageStatus.PENDING,
-            isRead = false
+            status = if (isFromAdmin) MessageStatus.RESOLVED else MessageStatus.PENDING,
+            isRead = isFromAdmin,
+            adminReply = null,
+            internalNotes = null,
+            isFromAdmin = isFromAdmin,
+            threadId = cleanThreadId,
+            createdAt = System.currentTimeMillis()
         )
 
         repositoryScope.launch {
@@ -1522,24 +1544,59 @@ class AlnoorRepository private constructor(private val context: Context) {
                         timestamp = newMessage.timestamp,
                         status = newMessage.status.name,
                         reply = null,
-                        isRead = false,
-                        internalNotes = null
+                        isRead = newMessage.isRead,
+                        internalNotes = null,
+                        isFromAdmin = newMessage.isFromAdmin,
+                        threadId = newMessage.threadId,
+                        createdAt = newMessage.createdAt
                     )
                 )
             } catch (e: Exception) {
-                Log.e("AlnoorRepository", "Failed saving user inquiry to DB: ${e.message}", e)
+                Log.e("AlnoorRepository", "Failed saving chat message to DB: ${e.message}", e)
             }
         }
 
-        // Push directly to Firestore so Admin's device receives the inquiry immediately
+        // Push directly to Firestore so the other party's device receives the message immediately
         firestoreSync.pushInquiryToCloud(newMessage, repositoryScope)
 
-        triggerFcmPushNotification("Inquiry Sent", "Your message to Alnoor Admin has been delivered.")
+        if (isFromAdmin) {
+            triggerFcmPushNotification(
+                "Admin Response Received",
+                "Alnoor Admin: ${text.take(60)}",
+                targetTab = "MESSAGES"
+            )
+        } else {
+            triggerFcmPushNotification(
+                "New Helpline Message",
+                "${senderName}: ${text.take(60)}",
+                targetTab = "MESSAGES"
+            )
+        }
+    }
+
+    fun submitUserMessage(senderName: String, senderContact: String, category: MessageCategory, subject: String, messageText: String) {
+        val contactKey = senderContact.trim().lowercase().filter { it.isLetterOrDigit() }
+        val threadId = if (contactKey.isNotBlank() && contactKey != "notprovided") "contact_$contactKey" else "user_${UUID.randomUUID().toString().take(8)}"
+        sendChatMessage(
+            threadId = threadId,
+            senderName = senderName,
+            senderContact = senderContact,
+            text = messageText,
+            isFromAdmin = false,
+            category = category,
+            subject = subject
+        )
     }
 
     fun markMessageRead(messageId: String, isRead: Boolean) {
         repositoryScope.launch {
             db.inquiriesDao().updateReadStatus(messageId, isRead)
+        }
+    }
+
+    fun markThreadAsRead(threadId: String, contact: String) {
+        repositoryScope.launch {
+            db.inquiriesDao().updateThreadReadStatus(threadId, contact, true)
         }
     }
 
@@ -1550,16 +1607,26 @@ class AlnoorRepository private constructor(private val context: Context) {
     }
 
     fun replyAndResolveMessage(messageId: String, replyText: String) {
+        // Also post as a direct chat message into that inquiry's thread so the 1-to-1 chat is unified!
+        val current = _messages.value.find { it.id == messageId }
+        if (current != null) {
+            val threadId = if (current.threadId.isNotBlank()) current.threadId else "contact_${current.senderContact.trim().lowercase().filter { it.isLetterOrDigit() }}"
+            sendChatMessage(
+                threadId = threadId,
+                senderName = "Mosque Administration",
+                senderContact = "helpline@alnoor.org",
+                text = replyText,
+                isFromAdmin = true,
+                category = current.category,
+                subject = "Re: ${current.subject}"
+            )
+        }
+
         repositoryScope.launch {
             db.inquiriesDao().updateReply(messageId, MessageStatus.RESOLVED.name, replyText)
         }
         // Push Admin reply to Firestore so user's client receives it instantly
         firestoreSync.updateInquiryReplyInCloud(messageId, MessageStatus.RESOLVED, replyText, repositoryScope)
-        triggerFcmPushNotification(
-            "Admin Response Received",
-            "The Admin has replied to inquiry #$messageId",
-            targetTab = "MESSAGES"
-        )
     }
 
     fun deleteMessage(messageId: String) {
@@ -1567,6 +1634,15 @@ class AlnoorRepository private constructor(private val context: Context) {
             db.inquiriesDao().deleteInquiry(messageId)
         }
         firestoreSync.deleteInquiryFromCloud(messageId, repositoryScope)
+    }
+
+    fun deleteThread(threadId: String, contact: String, messagesInThread: List<AdminMessage>) {
+        repositoryScope.launch {
+            db.inquiriesDao().deleteThread(threadId, contact)
+            messagesInThread.forEach { msg ->
+                firestoreSync.deleteInquiryFromCloud(msg.id, repositoryScope)
+            }
+        }
     }
 
     // --- Monthly Darood Counter ---
