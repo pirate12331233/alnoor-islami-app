@@ -6,6 +6,8 @@ import android.app.NotificationManager
 import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
 import android.media.AudioAttributes
 import android.media.RingtoneManager
 import android.os.Build
@@ -13,6 +15,7 @@ import android.os.PowerManager
 import android.util.Log
 import androidx.core.app.NotificationCompat
 import com.example.MainActivity
+import com.example.R
 
 object NotificationHelper {
     const val CHANNEL_ID_BROADCASTS = "alnoor_community_broadcasts_v3"
@@ -56,7 +59,7 @@ object NotificationHelper {
         title: String,
         body: String,
         targetTab: String? = null,
-        notificationId: Int = (System.currentTimeMillis() % 100000).toInt()
+        notificationId: Int? = null
     ) {
         try {
             val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as? NotificationManager
@@ -66,6 +69,25 @@ object NotificationHelper {
 
             // Turn screen on if phone is locked
             wakeUpScreen(context)
+
+            // Mask/transform event title as requested
+            val displayTitle = when {
+                title.equals("New Community Event", ignoreCase = true) ||
+                title.contains("New Community Event", ignoreCase = true) ->
+                    title.replace("New Community Event", "Upcoming New Mahafil", ignoreCase = true)
+
+                title.equals("Community Event Updated", ignoreCase = true) ||
+                title.contains("Community Event Updated", ignoreCase = true) ->
+                    title.replace("Community Event Updated", "Upcoming Mahafil Updated", ignoreCase = true)
+
+                title.equals("Community Event", ignoreCase = true) ->
+                    "Upcoming New Mahafil"
+
+                else -> title
+            }
+
+            // Deduplicate notification ID by content so duplicate identical pushes do not show duplicate cards
+            val finalNotificationId = notificationId ?: (displayTitle.trim() + "_" + body.trim()).hashCode()
 
             // Intent to open MainActivity when user taps the notification
             val tapIntent = Intent(context, MainActivity::class.java).apply {
@@ -77,7 +99,7 @@ object NotificationHelper {
 
             val pendingIntent = PendingIntent.getActivity(
                 context,
-                notificationId,
+                finalNotificationId,
                 tapIntent,
                 PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
             )
@@ -85,23 +107,37 @@ object NotificationHelper {
             val soundUri = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION)
             val vibrationPattern = longArrayOf(0, 450, 200, 450)
 
+            // Decode Alnoor Islamic App icon for display in notification header & large icon
+            val appLogoBitmap: Bitmap? = try {
+                BitmapFactory.decodeResource(context.resources, R.drawable.app_logo)
+                    ?: BitmapFactory.decodeResource(context.resources, R.mipmap.ic_launcher)
+            } catch (_: Exception) {
+                null
+            }
+
             val builder = NotificationCompat.Builder(context, CHANNEL_ID_BROADCASTS)
-                .setSmallIcon(android.R.drawable.ic_dialog_info)
-                .setContentTitle(title)
+                .setSmallIcon(R.drawable.app_logo)
+                .setContentTitle(displayTitle)
                 .setContentText(body)
                 .setStyle(NotificationCompat.BigTextStyle().bigText(body))
                 .setPriority(NotificationCompat.PRIORITY_MAX)
                 .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
                 .setCategory(NotificationCompat.CATEGORY_EVENT)
+                .setColor(0xFF059669.toInt()) // Signature Alnoor Islamic Emerald Green
                 .setSound(soundUri)
                 .setVibrate(vibrationPattern)
                 .setDefaults(NotificationCompat.DEFAULT_LIGHTS or NotificationCompat.DEFAULT_VIBRATE)
                 .setAutoCancel(true)
                 .setFullScreenIntent(pendingIntent, false) // Enables heads-up popup over locked or active screen
                 .setContentIntent(pendingIntent)
+                .apply {
+                    if (appLogoBitmap != null) {
+                        setLargeIcon(appLogoBitmap)
+                    }
+                }
 
-            notificationManager.notify(notificationId, builder.build())
-            Log.d("NotificationHelper", "High-priority heads-up notification posted with default sound: $title")
+            notificationManager.notify(finalNotificationId, builder.build())
+            Log.d("NotificationHelper", "High-priority heads-up notification posted with default sound: $displayTitle")
         } catch (e: Exception) {
             Log.w("NotificationHelper", "Failed to display notification: ${e.message}", e)
         }

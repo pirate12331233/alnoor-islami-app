@@ -799,7 +799,7 @@ class AlnoorRepository private constructor(private val context: Context) {
         // Broadcast immediately to Firestore Cloud so all connected users receive the event in real-time
         firestoreSync.pushEventToCloud(event, repositoryScope)
         triggerFcmPushNotification(
-            "New Community Event",
+            "Upcoming New Mahafil",
             "${event.title} on ${event.dateGregorian}",
             targetTab = "EVENTS"
         )
@@ -830,7 +830,7 @@ class AlnoorRepository private constructor(private val context: Context) {
         }
         firestoreSync.pushEventToCloud(event, repositoryScope)
         triggerFcmPushNotification(
-            "Community Event Updated",
+            "Upcoming Mahafil Updated",
             "${event.title} details updated by Admin.",
             targetTab = "EVENTS"
         )

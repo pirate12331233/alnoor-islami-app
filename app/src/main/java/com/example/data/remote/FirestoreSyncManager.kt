@@ -198,7 +198,7 @@ class FirestoreSyncManager private constructor() {
                             val ev = newlyAdded.last()
                             NotificationHelper.showHeadsUpNotification(
                                 context = context,
-                                title = "New Community Event",
+                                title = "Upcoming New Mahafil",
                                 body = "${ev.title} on ${ev.dateGregorian}",
                                 targetTab = "EVENTS"
                             )
@@ -206,7 +206,7 @@ class FirestoreSyncManager private constructor() {
                             val ev = updated.last()
                             NotificationHelper.showHeadsUpNotification(
                                 context = context,
-                                title = "Community Event Updated",
+                                title = "Upcoming Mahafil Updated",
                                 body = "${ev.title} details updated by Admin.",
                                 targetTab = "EVENTS"
                             )
@@ -521,7 +521,7 @@ class FirestoreSyncManager private constructor() {
                         val latestEvent = newlyAddedEvents.last()
                         withContext(Dispatchers.Main) {
                             onNotificationReceived?.invoke(
-                                "New Community Event",
+                                "Upcoming New Mahafil",
                                 "${latestEvent.title} on ${latestEvent.dateGregorian}"
                             )
                         }
@@ -529,7 +529,7 @@ class FirestoreSyncManager private constructor() {
                         val latestEvent = updatedEvents.last()
                         withContext(Dispatchers.Main) {
                             onNotificationReceived?.invoke(
-                                "Community Event Updated",
+                                "Upcoming Mahafil Updated",
                                 "${latestEvent.title} details updated by Admin."
                             )
                         }
