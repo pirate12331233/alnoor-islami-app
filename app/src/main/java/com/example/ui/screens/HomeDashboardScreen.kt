@@ -97,6 +97,7 @@ import com.example.ui.theme.Gold400
 import com.example.ui.theme.Gold500
 import com.example.ui.theme.Gold600
 import com.example.ui.theme.LiveRed
+import com.example.ui.theme.SuccessGreen
 import com.example.ui.theme.YoutubeRed
 
 @Composable
@@ -649,13 +650,15 @@ fun HomeDashboardScreen(
         // --- 10. [VERTICAL ACTION CARD 8] DIRECT ADMIN HELPLINE & MESSAGES ---
         if (isCardVisible("MESSAGES")) {
             val messagesCard = getCard("MESSAGES")
+            val hasUnread = inquiriesCount > 0
             item {
                 VerticalActionCard(
                     icon = Icons.Default.Mail,
-                    iconTint = Color(0xFFF87171),
-                    iconBackground = Color(0xFF3B1818),
-                    title = messagesCard?.displayTitle ?: "Mosque Helpline & Contact Admin",
-                    subtitle = messagesCard?.displaySubtitle ?: "Submit religious questions, inquiries, and private feedback",
+                    iconTint = if (hasUnread) Color(0xFFF87171) else SuccessGreen,
+                    iconBackground = if (hasUnread) Color(0xFF3B1818) else Emerald800.copy(alpha = 0.35f),
+                    title = messagesCard?.displayTitle ?: "Alnoor Islami Admin & Helpline",
+                    subtitle = messagesCard?.displaySubtitle ?: "Direct 1-to-1 WhatsApp-style chat with Alnoor Admin",
+                    badgeText = if (hasUnread) "$inquiriesCount NEW" else "ALL READ",
                     isHiddenFromMembers = isCardHiddenFromMembers("MESSAGES"),
                     onClick = { onNavigateToTab(AppTab.MESSAGES) },
                     testTag = "action_card_messages"

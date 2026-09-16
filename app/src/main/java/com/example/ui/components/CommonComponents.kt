@@ -51,6 +51,7 @@ import androidx.compose.material.icons.filled.VolumeUp
 import androidx.compose.material.icons.outlined.PhotoLibrary
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Badge
+import androidx.compose.material3.BadgedBox
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -98,6 +99,7 @@ import com.example.ui.theme.Gold400
 import com.example.ui.theme.Gold500
 import com.example.ui.theme.Gold600
 import com.example.ui.theme.LiveRed
+import com.example.ui.theme.SuccessGreen
 import com.example.ui.theme.UrgentRed
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Home
@@ -142,6 +144,8 @@ fun AlnoorTopBar(
     selectedTab: AppTab = AppTab.HOME,
     onBackToHome: (() -> Unit)? = null,
     onSearchClick: () -> Unit = {},
+    onMessagesClick: () -> Unit = {},
+    unreadMessagesCount: Int = 0,
     onAuthClick: () -> Unit = {},
     onAdminUsersClick: (() -> Unit)? = null,
     onSignOutClick: (() -> Unit)? = null,
@@ -156,7 +160,7 @@ fun AlnoorTopBar(
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 12.dp, vertical = 10.dp),
+                    .padding(horizontal = 8.dp, vertical = 7.dp),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
@@ -202,11 +206,13 @@ fun AlnoorTopBar(
                     // Main Dashboard Top Bar (Logo & App Name)
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier.clickable { onOpenLiveChannel() }
+                        modifier = Modifier
+                            .weight(1f, fill = false)
+                            .clickable { onOpenLiveChannel() }
                     ) {
                         Box(
                             modifier = Modifier
-                                .size(42.dp)
+                                .size(38.dp)
                                 .background(Color.White.copy(alpha = 0.12f), RoundedCornerShape(10.dp))
                                 .padding(2.dp),
                             contentAlignment = Alignment.Center
@@ -218,16 +224,18 @@ fun AlnoorTopBar(
                                 contentScale = ContentScale.Fit
                             )
                         }
-                        Spacer(modifier = Modifier.width(10.dp))
-                        Column {
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Column(modifier = Modifier.weight(1f, fill = false)) {
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 Text(
                                     text = "Alnoor Islami",
                                     style = MaterialTheme.typography.titleMedium,
                                     fontWeight = FontWeight.Bold,
-                                    color = Color.White
+                                    color = Color.White,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
                                 )
-                                Spacer(modifier = Modifier.width(6.dp))
+                                Spacer(modifier = Modifier.width(5.dp))
                                 // YouTube live badge button
                                 Surface(
                                     shape = RoundedCornerShape(12.dp),
@@ -237,19 +245,19 @@ fun AlnoorTopBar(
                                         .testTag("youtube_live_badge")
                                 ) {
                                     Row(
-                                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                                        modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp),
                                         verticalAlignment = Alignment.CenterVertically
                                     ) {
                                         Box(
                                             modifier = Modifier
-                                                .size(6.dp)
+                                                .size(5.dp)
                                                 .clip(CircleShape)
                                                 .background(Color.White)
                                         )
-                                        Spacer(modifier = Modifier.width(4.dp))
+                                        Spacer(modifier = Modifier.width(3.dp))
                                         Text(
                                             text = "LIVE",
-                                            fontSize = 9.sp,
+                                            fontSize = 8.5.sp,
                                             fontWeight = FontWeight.Black,
                                             color = Color.White
                                         )
@@ -259,7 +267,9 @@ fun AlnoorTopBar(
                             Text(
                                 text = "@AlnoorislamiMushahidat",
                                 style = MaterialTheme.typography.labelSmall,
-                                color = Gold300
+                                color = Gold300,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
                             )
                         }
                     }
@@ -268,49 +278,72 @@ fun AlnoorTopBar(
                 // Action Icons (User Management if admin, Search, Role Badge)
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                    horizontalArrangement = Arrangement.spacedBy(3.dp)
                 ) {
                     if (currentRole == UserRole.ADMIN && onAdminUsersClick != null) {
                         IconButton(
                             onClick = onAdminUsersClick,
-                            modifier = Modifier.size(34.dp)
+                            modifier = Modifier.size(32.dp)
                         ) {
                             Icon(
                                 imageVector = Icons.Default.ManageAccounts,
                                 contentDescription = "Admin User Management",
                                 tint = Gold400,
-                                modifier = Modifier.size(20.dp)
+                                modifier = Modifier.size(18.dp)
                             )
                         }
                     }
 
+                    // Messages Action Icon with Live Unread Indicator (Red when unread, Green when all read)
                     IconButton(
-                        onClick = onSearchClick,
-                        modifier = Modifier.size(34.dp)
+                        onClick = onMessagesClick,
+                        modifier = Modifier.size(32.dp)
                     ) {
-                        Icon(
-                            imageVector = Icons.Default.Search,
-                            contentDescription = "Search Library & Notices",
-                            tint = Gold300,
-                            modifier = Modifier.size(20.dp)
-                        )
+                        BadgedBox(
+                            badge = {
+                                if (unreadMessagesCount > 0) {
+                                    Badge(
+                                        containerColor = UrgentRed,
+                                        contentColor = Color.White
+                                    ) {
+                                        Text(
+                                            text = if (unreadMessagesCount > 99) "99+" else "$unreadMessagesCount",
+                                            fontSize = 9.sp,
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                    }
+                                } else {
+                                    Badge(
+                                        containerColor = SuccessGreen,
+                                        modifier = Modifier.size(5.dp)
+                                    )
+                                }
+                            }
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Mail,
+                                contentDescription = "Helpline & Messages",
+                                tint = if (unreadMessagesCount > 0) Color(0xFFFCA5A5) else SuccessGreen,
+                                modifier = Modifier.size(19.dp)
+                            )
+                        }
                     }
 
                     // Column containing the Member/Admin Mode button with the Exit button directly BELOW it
                     Column(
                         horizontalAlignment = Alignment.End,
-                        verticalArrangement = Arrangement.spacedBy(4.dp)
+                        verticalArrangement = Arrangement.spacedBy(3.dp)
                     ) {
                         // Role Switcher / Badge Button
                         Surface(
-                            shape = RoundedCornerShape(16.dp),
+                            shape = RoundedCornerShape(12.dp),
                             color = if (currentRole == UserRole.ADMIN) Gold500 else Emerald800,
                             modifier = Modifier
                                 .clickable { onRoleClick() }
                                 .testTag("role_switcher_button")
                         ) {
                             Row(
-                                modifier = Modifier.padding(horizontal = 9.dp, vertical = 4.dp),
+                                modifier = Modifier.padding(horizontal = 7.dp, vertical = 3.5.dp),
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
                                 Icon(
@@ -319,11 +352,13 @@ fun AlnoorTopBar(
                                     tint = if (currentRole == UserRole.ADMIN) Emerald900 else Gold300,
                                     modifier = Modifier.size(13.dp)
                                 )
-                                Spacer(modifier = Modifier.width(4.dp))
+                                Spacer(modifier = Modifier.width(3.dp))
                                 Text(
                                     text = if (currentRole == UserRole.ADMIN) "Admin Mode" else "Member",
-                                    fontSize = 11.sp,
+                                    fontSize = 10.5.sp,
                                     fontWeight = FontWeight.Bold,
+                                    maxLines = 1,
+                                    softWrap = false,
                                     color = if (currentRole == UserRole.ADMIN) Emerald900 else Color.White
                                 )
                             }
@@ -332,7 +367,7 @@ fun AlnoorTopBar(
                         // Exit button positioned below Member button
                         if (onSignOutClick != null) {
                             Surface(
-                                shape = RoundedCornerShape(12.dp),
+                                shape = RoundedCornerShape(10.dp),
                                 color = UrgentRed.copy(alpha = 0.22f),
                                 border = androidx.compose.foundation.BorderStroke(1.dp, UrgentRed.copy(alpha = 0.65f)),
                                 modifier = Modifier
@@ -340,20 +375,22 @@ fun AlnoorTopBar(
                                     .testTag("topbar_exit_button")
                             ) {
                                 Row(
-                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.5.dp),
+                                    modifier = Modifier.padding(horizontal = 7.dp, vertical = 2.dp),
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
                                     Icon(
                                         imageVector = Icons.Default.ExitToApp,
                                         contentDescription = "Exit Application",
                                         tint = Gold300,
-                                        modifier = Modifier.size(12.dp)
+                                        modifier = Modifier.size(11.dp)
                                     )
                                     Spacer(modifier = Modifier.width(3.dp))
                                     Text(
                                         text = "Exit",
-                                        fontSize = 10.sp,
+                                        fontSize = 9.5.sp,
                                         fontWeight = FontWeight.Bold,
+                                        maxLines = 1,
+                                        softWrap = false,
                                         color = Color.White
                                     )
                                 }

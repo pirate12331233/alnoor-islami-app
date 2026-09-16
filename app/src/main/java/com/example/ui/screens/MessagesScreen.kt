@@ -156,7 +156,7 @@ fun buildChatBubbles(messages: List<AdminMessage>): List<ChatBubbleItem> {
                     text = msg.message,
                     timestamp = msg.timestamp,
                     isFromAdmin = true,
-                    senderName = msg.senderName.ifBlank { "Mosque Administration" },
+                    senderName = msg.senderName.ifBlank { "Alnoor Admin" },
                     senderContact = msg.senderContact,
                     isRead = true,
                     category = msg.category,
@@ -186,7 +186,7 @@ fun buildChatBubbles(messages: List<AdminMessage>): List<ChatBubbleItem> {
                         text = msg.adminReply,
                         timestamp = msg.timestamp,
                         isFromAdmin = true,
-                        senderName = "Mosque Administration",
+                        senderName = "Alnoor Admin",
                         senderContact = "helpline@alnoor.org",
                         isRead = true,
                         category = msg.category,
@@ -406,7 +406,7 @@ fun UserWhatsAppChatView(
                         Column {
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 Text(
-                                    text = "Alnoor Mosque Helpline",
+                                    text = "Alnoor Islami Admin",
                                     fontWeight = FontWeight.Bold,
                                     fontSize = 16.sp,
                                     color = Color.White
@@ -428,15 +428,6 @@ fun UserWhatsAppChatView(
                     }
 
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        IconButton(onClick = { showInfoDialog = true }) {
-                            Icon(
-                                Icons.Default.Info,
-                                contentDescription = "Helpline Info",
-                                tint = Gold400,
-                                modifier = Modifier.size(22.dp)
-                            )
-                        }
-
                         IconButton(onClick = onAdminLoginPrompt) {
                             Icon(
                                 Icons.Default.Shield,
@@ -486,46 +477,6 @@ fun UserWhatsAppChatView(
                             modifier = Modifier.size(12.dp)
                         )
                     }
-                }
-            }
-        }
-
-        // --- CATEGORY SELECTOR CHIPS ---
-        Surface(
-            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            LazyRow(
-                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                item {
-                    Text("Topic:", fontSize = 11.sp, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                }
-                items(MessageCategory.values()) { category ->
-                    val isSelected = selectedCategory == category
-                    FilterChip(
-                        selected = isSelected,
-                        onClick = { selectedCategory = category },
-                        label = {
-                            Text(
-                                text = when (category) {
-                                    MessageCategory.DUA_REQUEST -> "🤲 Dua Request"
-                                    MessageCategory.MASLA_FATWA -> "📖 Masla / Ruling"
-                                    MessageCategory.EVENT_INQUIRY -> "📅 Event Query"
-                                    MessageCategory.GENERAL -> "💬 General"
-                                },
-                                fontSize = 11.sp
-                            )
-                        },
-                        colors = FilterChipDefaults.filterChipColors(
-                            selectedContainerColor = Emerald800,
-                            selectedLabelColor = Color.White,
-                            containerColor = MaterialTheme.colorScheme.surface
-                        ),
-                        shape = RoundedCornerShape(16.dp)
-                    )
                 }
             }
         }
@@ -592,7 +543,7 @@ fun UserWhatsAppChatView(
                                 color = Gold300.copy(alpha = 0.2f)
                             ) {
                                 Text(
-                                    text = "🔒 Direct 1-to-1 conversation with Mosque Administration. All replies appear right here.",
+                                    text = "🔒 Direct 1-to-1 conversation with Alnoor Admin. All replies appear right here.",
                                     fontSize = 11.sp,
                                     color = Gold600,
                                     fontWeight = FontWeight.Medium,
@@ -624,7 +575,7 @@ fun UserWhatsAppChatView(
                                 shadowElevation = 1.dp
                             ) {
                                 Text(
-                                    text = "🔒 Direct conversation with Alnoor Mosque",
+                                    text = "🔒 Direct conversation with Alnoor Admin",
                                     fontSize = 11.sp,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                                     modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp)
@@ -663,11 +614,7 @@ fun UserWhatsAppChatView(
                     onValueChange = { messageInput = it },
                     placeholder = {
                         Text(
-                            text = when (selectedCategory) {
-                                MessageCategory.DUA_REQUEST -> "Type your Dua request..."
-                                MessageCategory.MASLA_FATWA -> "Ask your question or Masla..."
-                                else -> "Type a message to Mosque Admin..."
-                            },
+                            text = "Type a message to Alnoor Admin...",
                             fontSize = 13.sp
                         )
                     },
@@ -796,7 +743,7 @@ fun UserWhatsAppChatView(
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Icon(Icons.Default.Mosque, contentDescription = null, tint = Emerald800)
                     Spacer(modifier = Modifier.width(8.dp))
-                    Text("Mosque Helpline", fontWeight = FontWeight.Bold)
+                    Text("Alnoor Islami Admin", fontWeight = FontWeight.Bold)
                 }
             },
             text = {
@@ -860,7 +807,7 @@ fun UserChatBubble(
                             color = Gold500.copy(alpha = 0.2f)
                         ) {
                             Text(
-                                text = "Mosque Administration",
+                                text = "Alnoor Admin",
                                 fontSize = 10.sp,
                                 fontWeight = FontWeight.Bold,
                                 color = Gold600,
@@ -950,7 +897,7 @@ fun AdminChatMasterView(
             onSendReply = { text ->
                 onSendChatMessage(
                     currentThread.threadId,
-                    "Mosque Administration",
+                    "Alnoor Admin",
                     "helpline@alnoor.org",
                     text,
                     true, // isFromAdmin = true
@@ -1047,7 +994,7 @@ fun AdminChatInboxView(
                             color = Color.White
                         )
                         Text(
-                            text = "${threads.size} active user conversations • $pendingCount awaiting reply",
+                            text = "${threads.size} active user conversations",
                             fontSize = 12.sp,
                             color = Gold300
                         )
@@ -1117,12 +1064,6 @@ fun AdminChatInboxView(
                     colors = FilterChipDefaults.filterChipColors(selectedContainerColor = Emerald800, selectedLabelColor = Color.White)
                 )
                 FilterChip(
-                    selected = selectedFilter == "PENDING",
-                    onClick = { selectedFilter = "PENDING" },
-                    label = { Text("Pending ($pendingCount)", fontSize = 12.sp) },
-                    colors = FilterChipDefaults.filterChipColors(selectedContainerColor = Gold500, selectedLabelColor = Emerald900)
-                )
-                FilterChip(
                     selected = selectedFilter == "UNREAD",
                     onClick = { selectedFilter = "UNREAD" },
                     label = { Text("Unread ($totalUnread)", fontSize = 12.sp) },
@@ -1182,11 +1123,13 @@ fun AdminChatInboxView(
                     },
                     colors = ButtonDefaults.buttonColors(containerColor = UrgentRed)
                 ) {
-                    Text("Delete Thread")
+                    Text("Yes, Delete", fontWeight = FontWeight.Bold)
                 }
             },
             dismissButton = {
-                TextButton(onClick = { threadToDelete = null }) { Text("Cancel") }
+                TextButton(onClick = { threadToDelete = null }) {
+                    Text("No, Cancel", fontWeight = FontWeight.SemiBold)
+                }
             }
         )
     }
@@ -1194,6 +1137,7 @@ fun AdminChatInboxView(
 
 /**
  * Single User Thread Card in the Admin Inbox (WhatsApp-style list item)
+ * Styled with Alnoor Islami deep emerald background, crisp white bold text, and gold accents.
  */
 @Composable
 fun AdminThreadCard(
@@ -1201,12 +1145,18 @@ fun AdminThreadCard(
     onClick: () -> Unit,
     onDelete: () -> Unit
 ) {
+    val isUnread = thread.unreadCount > 0
+
     Card(
-        shape = RoundedCornerShape(14.dp),
+        shape = RoundedCornerShape(16.dp),
         colors = CardDefaults.cardColors(
-            containerColor = if (thread.unreadCount > 0) Emerald800.copy(alpha = 0.08f) else Color.White
+            containerColor = if (isUnread) Color(0xFF065F46) else Color(0xFF064E3B)
         ),
-        elevation = CardDefaults.cardElevation(if (thread.unreadCount > 0) 3.dp else 1.dp),
+        border = androidx.compose.foundation.BorderStroke(
+            width = if (isUnread) 1.5.dp else 1.dp,
+            color = if (isUnread) Gold400 else Gold500.copy(alpha = 0.35f)
+        ),
+        elevation = CardDefaults.cardElevation(if (isUnread) 4.dp else 2.dp),
         modifier = Modifier
             .fillMaxWidth()
             .clickable { onClick() }
@@ -1215,21 +1165,19 @@ fun AdminThreadCard(
             modifier = Modifier.padding(14.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            // User Avatar Circle
+            // User Avatar Circle (Gold with Dark Emerald initial)
             Box(
                 contentAlignment = Alignment.Center,
                 modifier = Modifier
-                    .size(46.dp)
+                    .size(48.dp)
                     .clip(CircleShape)
-                    .background(
-                        if (thread.unreadCount > 0) Emerald800 else Emerald800.copy(alpha = 0.15f)
-                    )
+                    .background(Gold500)
             ) {
                 Text(
                     text = thread.userName.take(1).uppercase().ifBlank { "U" },
-                    fontSize = 18.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = if (thread.unreadCount > 0) Color.White else Emerald800
+                    fontSize = 20.sp,
+                    fontWeight = FontWeight.Black,
+                    color = Color(0xFF064E3B)
                 )
             }
 
@@ -1245,77 +1193,80 @@ fun AdminThreadCard(
                     Text(
                         text = thread.userName,
                         fontWeight = FontWeight.Bold,
-                        fontSize = 15.sp,
+                        fontSize = 16.sp,
+                        color = Color.White,
                         maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f, fill = false)
                     )
+                    Spacer(modifier = Modifier.width(8.dp))
                     Text(
                         text = thread.latestTimestamp,
-                        fontSize = 11.sp,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                        fontSize = 11.5.sp,
+                        fontWeight = FontWeight.Medium,
+                        color = Gold300
                     )
                 }
 
-                Spacer(modifier = Modifier.height(2.dp))
+                Spacer(modifier = Modifier.height(4.dp))
 
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Surface(
-                        shape = RoundedCornerShape(4.dp),
-                        color = when (thread.category) {
-                            MessageCategory.DUA_REQUEST -> Gold300.copy(alpha = 0.3f)
-                            MessageCategory.MASLA_FATWA -> Emerald800.copy(alpha = 0.15f)
-                            else -> MaterialTheme.colorScheme.surfaceVariant
-                        }
+                // User Identity Box (User Name / Contact / ID in prominent box)
+                Surface(
+                    shape = RoundedCornerShape(6.dp),
+                    color = Emerald800,
+                    border = androidx.compose.foundation.BorderStroke(0.8.dp, Gold400.copy(alpha = 0.55f))
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Text(
-                            text = thread.category.title,
-                            fontSize = 10.sp,
-                            fontWeight = FontWeight.SemiBold,
-                            color = when (thread.category) {
-                                MessageCategory.DUA_REQUEST -> Gold600
-                                MessageCategory.MASLA_FATWA -> Emerald800
-                                else -> MaterialTheme.colorScheme.onSurfaceVariant
-                            },
-                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                        Icon(
+                            imageVector = Icons.Default.Person,
+                            contentDescription = null,
+                            tint = Gold300,
+                            modifier = Modifier.size(13.dp)
                         )
-                    }
-
-                    if (thread.userContact.isNotBlank() && thread.userContact != "Not provided") {
-                        Spacer(modifier = Modifier.width(6.dp))
+                        Spacer(modifier = Modifier.width(4.dp))
+                        val userIdentifier = if (thread.userContact.isNotBlank() && thread.userContact != "Not provided") {
+                            "${thread.userName} • ${thread.userContact}"
+                        } else {
+                            "${thread.userName} • ID #${thread.threadId.takeLast(6)}"
+                        }
                         Text(
-                            text = "• ${thread.userContact}",
+                            text = userIdentifier,
                             fontSize = 11.sp,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            fontWeight = FontWeight.Bold,
+                            color = Gold300,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis
                         )
                     }
                 }
 
-                Spacer(modifier = Modifier.height(4.dp))
+                Spacer(modifier = Modifier.height(6.dp))
 
-                // Latest Message Snippet
+                // Latest Message Snippet (Clean, readable white/light-emerald text)
                 Text(
                     text = thread.latestMessage,
-                    fontSize = 13.sp,
-                    color = if (thread.unreadCount > 0) Color.Black else Color.Gray,
-                    fontWeight = if (thread.unreadCount > 0) FontWeight.SemiBold else FontWeight.Normal,
+                    fontSize = 13.5.sp,
+                    color = Color.White.copy(alpha = 0.9f),
+                    fontWeight = if (isUnread) FontWeight.SemiBold else FontWeight.Normal,
                     maxLines = 2,
                     overflow = TextOverflow.Ellipsis
                 )
             }
 
-            Spacer(modifier = Modifier.width(8.dp))
+            Spacer(modifier = Modifier.width(10.dp))
 
             // Badges & Action
             Column(
                 horizontalAlignment = Alignment.End,
-                verticalArrangement = Arrangement.spacedBy(6.dp)
+                verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
-                if (thread.unreadCount > 0) {
+                if (isUnread) {
                     Surface(
                         shape = CircleShape,
-                        color = Emerald800
+                        color = UrgentRed
                     ) {
                         Text(
                             text = "${thread.unreadCount}",
@@ -1325,37 +1276,25 @@ fun AdminThreadCard(
                             modifier = Modifier.padding(horizontal = 7.dp, vertical = 2.dp)
                         )
                     }
-                } else if (thread.isPending) {
-                    Surface(
-                        shape = RoundedCornerShape(6.dp),
-                        color = Gold500.copy(alpha = 0.2f)
-                    ) {
-                        Text(
-                            text = "PENDING",
-                            fontSize = 9.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = Gold600,
-                            modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp)
-                        )
-                    }
                 } else {
                     Icon(
-                        Icons.Default.CheckCircle,
-                        contentDescription = "Resolved",
+                        Icons.Default.DoneAll,
+                        contentDescription = "Read",
                         tint = SuccessGreen,
-                        modifier = Modifier.size(16.dp)
+                        modifier = Modifier.size(18.dp)
                     )
                 }
 
+                // Isolated Delete Button to prevent accidental taps
                 IconButton(
                     onClick = onDelete,
-                    modifier = Modifier.size(24.dp)
+                    modifier = Modifier.size(32.dp)
                 ) {
                     Icon(
                         Icons.Default.Delete,
-                        contentDescription = "Delete Thread",
-                        tint = UrgentRed.copy(alpha = 0.7f),
-                        modifier = Modifier.size(16.dp)
+                        contentDescription = "Delete Conversation",
+                        tint = UrgentRed.copy(alpha = 0.85f),
+                        modifier = Modifier.size(18.dp)
                     )
                 }
             }
@@ -1442,14 +1381,20 @@ fun AdminOneToOneChatView(
                     Text(
                         text = thread.userName,
                         fontWeight = FontWeight.Bold,
-                        fontSize = 15.sp,
+                        fontSize = 16.sp,
                         color = Color.White,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
                     )
+                    val contactOrId = if (thread.userContact.isNotBlank() && thread.userContact != "Not provided") {
+                        "${thread.userContact} • ID #${thread.threadId.takeLast(6)}"
+                    } else {
+                        "User ID #${thread.threadId.takeLast(6)}"
+                    }
                     Text(
-                        text = if (thread.userContact.isNotBlank() && thread.userContact != "Not provided") thread.userContact else "No contact provided",
-                        fontSize = 11.sp,
+                        text = contactOrId,
+                        fontSize = 11.5.sp,
+                        fontWeight = FontWeight.Medium,
                         color = Gold300,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
@@ -1723,18 +1668,29 @@ fun AdminChatBubble(
             Column {
                 if (!isAdmin) {
                     // User Header
-                    Text(
-                        text = userName,
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = Emerald800,
-                        modifier = Modifier.padding(bottom = 2.dp)
-                    )
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.padding(bottom = 3.dp)
+                    ) {
+                        Icon(
+                            Icons.Default.Person,
+                            contentDescription = null,
+                            tint = Emerald800,
+                            modifier = Modifier.size(13.dp)
+                        )
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text(
+                            text = userName,
+                            fontSize = 11.5.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = Emerald800
+                        )
+                    }
                 } else {
                     // Admin badge
                     Text(
-                        text = "You (Mosque Administration)",
-                        fontSize = 10.sp,
+                        text = "You (Alnoor Admin)",
+                        fontSize = 10.5.sp,
                         fontWeight = FontWeight.Bold,
                         color = Gold300,
                         modifier = Modifier.padding(bottom = 2.dp)
@@ -1744,7 +1700,7 @@ fun AdminChatBubble(
                 Text(
                     text = bubble.text,
                     fontSize = 14.sp,
-                    color = if (isAdmin) Color.White else Color(0xFF1E293B),
+                    color = if (isAdmin) Color.White else Color(0xFF0F172A),
                     lineHeight = 19.sp
                 )
 
@@ -1757,7 +1713,7 @@ fun AdminChatBubble(
                     Text(
                         text = bubble.timestamp,
                         fontSize = 10.sp,
-                        color = if (isAdmin) Color.White.copy(alpha = 0.7f) else Color.Gray
+                        color = if (isAdmin) Color.White.copy(alpha = 0.8f) else Color(0xFF64748B)
                     )
                     if (isAdmin) {
                         Spacer(modifier = Modifier.width(4.dp))

@@ -126,22 +126,7 @@ object EventDateHelper {
      * Converts a Gregorian date into Islamic (Hijri) date: Triple(day, month [1..12], year)
      */
     fun gregorianToHijri(year: Int, monthZeroIndexed: Int, day: Int): Triple<Int, Int, Int> {
-        var m = monthZeroIndexed + 1
-        var y = year
-        if (m <= 2) {
-            m += 12
-            y -= 1
-        }
-        val a = (y / 100)
-        val b = 2 - a + (a / 4)
-        val jd = (365.25 * (y + 4716)).toLong() + (30.6001 * (m + 1)).toInt() + day + b - 1524
-
-        val z = jd - 1948440
-        val hijriYear = ((30 * z + 10646) / 10631).toInt()
-        val remainderYear = z - ((10631 * hijriYear - 10617) / 30)
-        val hijriMonth = minOf(12, maxOf(1, ((remainderYear / 29.5) + 1).toInt()))
-        val hijriDay = minOf(30, maxOf(1, (remainderYear - (29.5 * (hijriMonth - 1))).toInt()))
-        return Triple(hijriDay, hijriMonth, hijriYear)
+        return IslamicDateHelper.gregorianToHijriAstronomical(year, monthZeroIndexed + 1, day)
     }
 
     /**
@@ -157,11 +142,6 @@ object EventDateHelper {
      * Estimates Hijri date string directly from a Calendar instance
      */
     fun estimateHijriDateFromCalendar(cal: Calendar): String {
-        val (hDay, hMonth, hYear) = gregorianToHijri(
-            cal.get(Calendar.YEAR),
-            cal.get(Calendar.MONTH),
-            cal.get(Calendar.DAY_OF_MONTH)
-        )
-        return formatHijriDate(hDay, hMonth - 1, hYear)
+        return IslamicDateHelper.getHijriDateForCalendar(cal)
     }
 }

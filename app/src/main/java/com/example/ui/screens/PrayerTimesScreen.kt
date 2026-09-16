@@ -19,6 +19,8 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -80,6 +82,7 @@ import com.example.ui.theme.Gold300
 import com.example.ui.theme.Gold400
 import com.example.ui.theme.Gold500
 import com.example.ui.theme.Gold600
+import com.example.util.IslamicDateHelper
 import com.example.util.PrayerLocationService
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -283,7 +286,8 @@ fun PrayerTimesScreen(
                                                     lat = coords.first,
                                                     lng = coords.second,
                                                     locationName = locName,
-                                                    countryName = country
+                                                    countryName = country,
+                                                    context = context
                                                 )
                                                 onUpdatePrayerTimes(newTimes)
                                                 showCountrySelector = false
@@ -511,19 +515,65 @@ fun PrayerTimesScreen(
         }
     }
 
-    // Edit Prayer Timings Dialog (Admin)
+    // Edit Prayer Timings & Islamic Hijri Date Dialog (Admin)
     if (showEditDialog) {
         var fajrIq by remember { mutableStateOf(prayerTimes.fajrIqamah) }
         var dhuhrIq by remember { mutableStateOf(prayerTimes.dhuhrIqamah) }
         var asrIq by remember { mutableStateOf(prayerTimes.asrIqamah) }
         var maghribIq by remember { mutableStateOf(prayerTimes.maghribIqamah) }
         var ishaIq by remember { mutableStateOf(prayerTimes.ishaIqamah) }
+        var hijriDateInput by remember { mutableStateOf(prayerTimes.dateHijri) }
+        var moonOffset by remember { mutableStateOf(IslamicDateHelper.getOffsetDays(context)) }
 
         AlertDialog(
             onDismissRequest = { showEditDialog = false },
-            title = { Text("Adjust Jamat (Iqamah) Timings", fontWeight = FontWeight.Bold) },
+            title = { Text("Timings & Islamic Date", fontWeight = FontWeight.Bold) },
             text = {
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Column(
+                    modifier = Modifier.verticalScroll(rememberScrollState()),
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    // Islamic Date Sighting Section
+                    Text("Islamic (Hijri) Date Adjustment", fontWeight = FontWeight.Bold, fontSize = 13.sp, color = Gold500)
+                    Text("Moon Sighting Offset (Regional Calendar Adjustment):", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        listOf(-2 to "-2d", -1 to "-1d", 0 to "Auto", 1 to "+1d", 2 to "+2d").forEach { (offset, label) ->
+                            val isSelected = moonOffset == offset
+                            Surface(
+                                shape = RoundedCornerShape(6.dp),
+                                color = if (isSelected) Emerald800 else MaterialTheme.colorScheme.surfaceVariant,
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(6.dp))
+                                    .clickable {
+                                        moonOffset = offset
+                                        hijriDateInput = IslamicDateHelper.getTodayHijriDate(context, offset)
+                                    }
+                            ) {
+                                Text(
+                                    text = label,
+                                    color = if (isSelected) Color.White else MaterialTheme.colorScheme.onSurfaceVariant,
+                                    fontSize = 11.sp,
+                                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 5.dp)
+                                )
+                            }
+                        }
+                    }
+
+                    OutlinedTextField(
+                        value = hijriDateInput,
+                        onValueChange = { hijriDateInput = it },
+                        label = { Text("Islamic / Hijri Date Display") },
+                        modifier = Modifier.fillMaxWidth()
+                    )
+
+                    HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
+
+                    Text("Jamat (Iqamah) Timings", fontWeight = FontWeight.Bold, fontSize = 13.sp, color = Gold500)
                     OutlinedTextField(value = fajrIq, onValueChange = { fajrIq = it }, label = { Text("Fajr Jamat") })
                     OutlinedTextField(value = dhuhrIq, onValueChange = { dhuhrIq = it }, label = { Text("Dhuhr Jamat") })
                     OutlinedTextField(value = asrIq, onValueChange = { asrIq = it }, label = { Text("Asr Jamat") })
@@ -534,8 +584,10 @@ fun PrayerTimesScreen(
             confirmButton = {
                 Button(
                     onClick = {
+                        IslamicDateHelper.saveOffsetDays(context, moonOffset)
                         onUpdatePrayerTimes(
                             prayerTimes.copy(
+                                dateHijri = hijriDateInput,
                                 fajrIqamah = fajrIq,
                                 dhuhrIqamah = dhuhrIq,
                                 asrIqamah = asrIq,
@@ -547,7 +599,7 @@ fun PrayerTimesScreen(
                     },
                     colors = ButtonDefaults.buttonColors(containerColor = Emerald800)
                 ) {
-                    Text("Save Timings")
+                    Text("Save Settings")
                 }
             },
             dismissButton = {

@@ -163,25 +163,28 @@ fun GalleryScreen(
             // --- 1. Top Header Banner ---
             item(span = { GridItemSpan(2) }) {
                 Card(
-                    shape = RoundedCornerShape(18.dp),
+                    shape = RoundedCornerShape(16.dp),
                     colors = CardDefaults.cardColors(containerColor = Emerald900),
-                    elevation = CardDefaults.cardElevation(5.dp),
+                    elevation = CardDefaults.cardElevation(3.dp),
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Column(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(16.dp)
+                            .padding(14.dp)
                     ) {
                         Row(
                             modifier = Modifier.fillMaxWidth(),
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.SpaceBetween
                         ) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier.weight(1f, fill = false)
+                            ) {
                                 Box(
                                     modifier = Modifier
-                                        .size(42.dp)
+                                        .size(40.dp)
                                         .clip(CircleShape)
                                         .background(Gold500),
                                     contentAlignment = Alignment.Center
@@ -190,26 +193,32 @@ fun GalleryScreen(
                                         Icons.Default.Collections,
                                         contentDescription = "Gallery",
                                         tint = Emerald900,
-                                        modifier = Modifier.size(24.dp)
+                                        modifier = Modifier.size(22.dp)
                                     )
                                 }
-                                Spacer(modifier = Modifier.width(12.dp))
+                                Spacer(modifier = Modifier.width(10.dp))
                                 Column {
                                     Text(
                                         text = "Alnoor Mosque Gallery",
                                         style = MaterialTheme.typography.titleMedium,
                                         fontWeight = FontWeight.Bold,
-                                        color = Color.White
+                                        color = Color.White,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis
                                     )
                                     Text(
-                                        text = "Photos, PDFs & Archive (${galleryAssets.size} files)",
+                                        text = "Photos & Media Archive (${galleryAssets.size} files)",
                                         style = MaterialTheme.typography.bodySmall,
-                                        color = Gold300
+                                        color = Gold300,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis
                                     )
                                 }
                             }
 
-                            Row(verticalAlignment = Alignment.CenterVertically) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
                                 IconButton(
                                     onClick = {
                                         isRefreshing = true
@@ -220,7 +229,7 @@ fun GalleryScreen(
                                         }, 1200)
                                     },
                                     modifier = Modifier
-                                        .size(36.dp)
+                                        .size(34.dp)
                                         .testTag("refresh_gallery_cloud_button")
                                 ) {
                                     Icon(
@@ -232,16 +241,17 @@ fun GalleryScreen(
                                 }
 
                                 if (currentRole == UserRole.ADMIN) {
-                                    Spacer(modifier = Modifier.width(6.dp))
+                                    Spacer(modifier = Modifier.width(4.dp))
                                     Surface(
-                                        shape = RoundedCornerShape(8.dp),
+                                        shape = RoundedCornerShape(6.dp),
                                         color = Gold500
                                     ) {
                                         Text(
-                                            text = "ADMIN UPLOADER",
+                                            text = "Admin",
                                             fontWeight = FontWeight.Bold,
                                             fontSize = 11.sp,
                                             color = Emerald900,
+                                            maxLines = 1,
                                             modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
                                         )
                                     }
@@ -250,7 +260,7 @@ fun GalleryScreen(
                         }
 
                         if (currentRole == UserRole.ADMIN) {
-                            Spacer(modifier = Modifier.height(14.dp))
+                            Spacer(modifier = Modifier.height(10.dp))
                             Button(
                                 onClick = { filePickerLauncher.launch("*/*") },
                                 shape = RoundedCornerShape(10.dp),
@@ -264,7 +274,7 @@ fun GalleryScreen(
                             ) {
                                 Icon(Icons.Default.UploadFile, contentDescription = null, modifier = Modifier.size(18.dp))
                                 Spacer(modifier = Modifier.width(8.dp))
-                                Text("Upload File (Open Native File Picker)", fontWeight = FontWeight.Bold)
+                                Text("Upload File (Native File Picker)", fontWeight = FontWeight.Bold)
                             }
                         }
                     }

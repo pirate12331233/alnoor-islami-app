@@ -204,14 +204,14 @@ fun NoticesScreen(
                                 Row(
                                     verticalAlignment = Alignment.CenterVertically,
                                     horizontalArrangement = Arrangement.spacedBy(8.dp),
-                                    modifier = Modifier.weight(1f)
+                                    modifier = Modifier.weight(1f, fill = false)
                                 ) {
                                     Surface(
                                         shape = RoundedCornerShape(6.dp),
                                         color = if (isPopupActive) UrgentRed else Color.Gray
                                     ) {
                                         Row(
-                                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 5.dp),
                                             verticalAlignment = Alignment.CenterVertically
                                         ) {
                                             Icon(
@@ -222,10 +222,11 @@ fun NoticesScreen(
                                             )
                                             Spacer(modifier = Modifier.width(4.dp))
                                             Text(
-                                                text = "FULL-SCREEN LOGIN POPUP",
-                                                fontSize = 9.sp,
+                                                text = "LOGIN POPUP",
+                                                fontSize = 10.sp,
                                                 fontWeight = FontWeight.Black,
-                                                color = Color.White
+                                                color = Color.White,
+                                                maxLines = 1
                                             )
                                         }
                                     }
@@ -235,11 +236,12 @@ fun NoticesScreen(
                                         color = if (isPopupActive) Emerald800 else Color.DarkGray
                                     ) {
                                         Text(
-                                            text = if (isPopupActive) "ACTIVE (ON)" else "OFF",
-                                            fontSize = 9.sp,
+                                            text = if (isPopupActive) "ACTIVE" else "OFF",
+                                            fontSize = 10.sp,
                                             fontWeight = FontWeight.Bold,
                                             color = Color.White,
-                                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 4.dp)
+                                            maxLines = 1,
+                                            modifier = Modifier.padding(horizontal = 7.dp, vertical = 5.dp)
                                         )
                                     }
                                 }
@@ -291,7 +293,10 @@ fun NoticesScreen(
                                         horizontalArrangement = Arrangement.SpaceBetween,
                                         verticalAlignment = Alignment.CenterVertically
                                     ) {
-                                        Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Row(
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            modifier = Modifier.weight(1f, fill = false)
+                                        ) {
                                             Icon(
                                                 imageVector = Icons.Default.Image,
                                                 contentDescription = "Poster",
@@ -307,6 +312,7 @@ fun NoticesScreen(
                                         }
 
                                         if (hasPosterImage) {
+                                            Spacer(modifier = Modifier.width(6.dp))
                                             Surface(
                                                 shape = RoundedCornerShape(4.dp),
                                                 color = Emerald800.copy(alpha = 0.15f)
@@ -316,7 +322,8 @@ fun NoticesScreen(
                                                     fontSize = 10.sp,
                                                     color = Emerald800,
                                                     fontWeight = FontWeight.Bold,
-                                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                                    maxLines = 1,
+                                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 4.dp)
                                                 )
                                             }
                                         }
@@ -553,11 +560,12 @@ fun NoticesScreen(
                             ) {
                                 Row(
                                     verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                                    modifier = Modifier.weight(1f, fill = false)
                                 ) {
                                     Box(
                                         modifier = Modifier
-                                            .size(38.dp)
+                                            .size(36.dp)
                                             .clip(RoundedCornerShape(10.dp))
                                             .background(if (isForcedActive) UrgentRed else Emerald800),
                                         contentAlignment = Alignment.Center
@@ -566,13 +574,13 @@ fun NoticesScreen(
                                             imageVector = Icons.Default.SystemUpdate,
                                             contentDescription = "Version Controller",
                                             tint = Color.White,
-                                            modifier = Modifier.size(20.dp)
+                                            modifier = Modifier.size(18.dp)
                                         )
                                     }
 
                                     Column {
                                         Text(
-                                            text = "App Version & Forced Update Console",
+                                            text = "App Version & Update Console",
                                             style = MaterialTheme.typography.titleSmall,
                                             fontWeight = FontWeight.Bold
                                         )
@@ -585,16 +593,19 @@ fun NoticesScreen(
                                     }
                                 }
 
+                                Spacer(modifier = Modifier.width(6.dp))
+
                                 Surface(
                                     shape = RoundedCornerShape(6.dp),
                                     color = if (isForcedActive) UrgentRed else Emerald800
                                 ) {
                                     Text(
-                                        text = if (isForcedActive) "FORCED GATE: ON" else "OPTIONAL",
-                                        fontSize = 9.sp,
-                                        fontWeight = FontWeight.Black,
+                                        text = if (isForcedActive) "FORCED: ON" else "OPTIONAL",
+                                        fontSize = 10.sp,
+                                        fontWeight = FontWeight.Bold,
                                         color = Color.White,
-                                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 4.dp)
+                                        maxLines = 1,
+                                        modifier = Modifier.padding(horizontal = 7.dp, vertical = 4.dp)
                                     )
                                 }
                             }

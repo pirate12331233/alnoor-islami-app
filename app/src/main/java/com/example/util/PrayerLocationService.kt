@@ -108,10 +108,20 @@ object PrayerLocationService {
         }
 
         val today = SimpleDateFormat("EEEE, MMMM dd, yyyy", Locale.getDefault()).format(Date())
+        val dynamicHijri = IslamicDateHelper.getTodayHijriDate(context)
+        val savedGregorian = prefs.getString("date_gregorian", today) ?: today
+        val savedHijri = prefs.getString("date_hijri", "")
+
+        // Roll over or fix hardcoded legacy date
+        val resolvedHijri = if (savedHijri.isNullOrBlank() || savedHijri.contains("18 Safar") || savedGregorian != today) {
+            dynamicHijri
+        } else {
+            savedHijri
+        }
 
         return PrayerTimesData(
-            dateGregorian = prefs.getString("date_gregorian", today) ?: today,
-            dateHijri = prefs.getString("date_hijri", "18 Safar 1448 AH") ?: "18 Safar 1448 AH",
+            dateGregorian = today,
+            dateHijri = resolvedHijri,
             locationName = prefs.getString("location_name", "Alnoor Mosque Complex") ?: "Alnoor Mosque Complex",
             countryName = prefs.getString("country_name", getCountryForLocale()) ?: getCountryForLocale(),
             fajr = prefs.getString("fajr", "05:05 AM") ?: "05:05 AM",
@@ -181,20 +191,25 @@ object PrayerLocationService {
             lat = latitude,
             lng = longitude,
             locationName = "$city, $country",
-            countryName = country
+            countryName = country,
+            context = context
         )
 
         // Save persistently for future use and mark sync timestamp
         savePrayerTimes(context, timesData, latitude, longitude, updateTimestamp = true)
+
+        // Asynchronously check official region-specific Hijri calendar from Aladhan
+        IslamicDateHelper.syncLiveHijriDate(context, latitude, longitude)
 
         onResult(timesData)
     }
 
     private fun getDefaultPrayerTimes(): PrayerTimesData {
         val today = SimpleDateFormat("EEEE, MMMM dd, yyyy", Locale.getDefault()).format(Date())
+        val todayHijri = IslamicDateHelper.getHijriDateForCalendar(Calendar.getInstance())
         return PrayerTimesData(
             dateGregorian = today,
-            dateHijri = "18 Safar 1448 AH",
+            dateHijri = todayHijri,
             locationName = "Alnoor Mosque Complex",
             countryName = getCountryForLocale(),
             fajr = "05:05 AM",
@@ -256,7 +271,8 @@ object PrayerLocationService {
         lat: Double,
         lng: Double,
         locationName: String,
-        countryName: String
+        countryName: String,
+        context: Context? = null
     ): PrayerTimesData {
         val calendar = Calendar.getInstance()
         val dayOfYear = calendar.get(Calendar.DAY_OF_YEAR)
@@ -326,9 +342,15 @@ object PrayerLocationService {
         val ishaStr = formatHourToTime(ishaHour)
         val tahajjudStr = formatHourToTime(tahajjudHour)
 
+        val dateHijri = if (context != null) {
+            IslamicDateHelper.getTodayHijriDate(context)
+        } else {
+            IslamicDateHelper.getHijriDateForCalendar(calendar)
+        }
+
         return PrayerTimesData(
             dateGregorian = dateGregorian,
-            dateHijri = "18 Safar 1448 AH",
+            dateHijri = dateHijri,
             locationName = locationName,
             countryName = countryName,
             fajr = fajrStr,

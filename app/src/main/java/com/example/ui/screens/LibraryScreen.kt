@@ -166,25 +166,28 @@ fun LibraryScreen(
             // --- 1. Top Header Banner ---
             item {
                 Card(
-                    shape = RoundedCornerShape(18.dp),
+                    shape = RoundedCornerShape(16.dp),
                     colors = CardDefaults.cardColors(containerColor = Emerald900),
-                    elevation = CardDefaults.cardElevation(5.dp),
+                    elevation = CardDefaults.cardElevation(3.dp),
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Column(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(16.dp)
+                            .padding(14.dp)
                     ) {
                         Row(
                             modifier = Modifier.fillMaxWidth(),
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.SpaceBetween
                         ) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier.weight(1f, fill = false)
+                            ) {
                                 Box(
                                     modifier = Modifier
-                                        .size(42.dp)
+                                        .size(40.dp)
                                         .clip(CircleShape)
                                         .background(Gold500),
                                     contentAlignment = Alignment.Center
@@ -193,35 +196,41 @@ fun LibraryScreen(
                                         Icons.Default.PictureAsPdf,
                                         contentDescription = "PDFs & Images",
                                         tint = Emerald900,
-                                        modifier = Modifier.size(24.dp)
+                                        modifier = Modifier.size(22.dp)
                                     )
                                 }
-                                Spacer(modifier = Modifier.width(12.dp))
+                                Spacer(modifier = Modifier.width(10.dp))
                                 Column {
                                     Text(
                                         text = "Islamic Digital Library",
                                         style = MaterialTheme.typography.titleMedium,
                                         fontWeight = FontWeight.Bold,
-                                        color = Color.White
+                                        color = Color.White,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis
                                     )
                                     Text(
-                                        text = "PDF Documents, Books & Images (${books.size} files)",
+                                        text = "PDF Books & Images (${books.size} files)",
                                         style = MaterialTheme.typography.bodySmall,
-                                        color = Gold300
+                                        color = Gold300,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis
                                     )
                                 }
                             }
 
                             if (currentRole == UserRole.ADMIN) {
+                                Spacer(modifier = Modifier.width(8.dp))
                                 Surface(
-                                    shape = RoundedCornerShape(8.dp),
+                                    shape = RoundedCornerShape(6.dp),
                                     color = Gold500
                                 ) {
                                     Text(
-                                        text = "ADMIN UPLOADER",
+                                        text = "Admin",
                                         fontWeight = FontWeight.Bold,
                                         fontSize = 11.sp,
                                         color = Emerald900,
+                                        maxLines = 1,
                                         modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
                                     )
                                 }
@@ -229,7 +238,7 @@ fun LibraryScreen(
                         }
 
                         if (currentRole == UserRole.ADMIN) {
-                            Spacer(modifier = Modifier.height(14.dp))
+                            Spacer(modifier = Modifier.height(10.dp))
                             Button(
                                 onClick = { filePickerLauncher.launch("*/*") },
                                 shape = RoundedCornerShape(10.dp),
@@ -243,7 +252,7 @@ fun LibraryScreen(
                             ) {
                                 Icon(Icons.Default.UploadFile, contentDescription = null, modifier = Modifier.size(18.dp))
                                 Spacer(modifier = Modifier.width(8.dp))
-                                Text("Upload File (Open Native File Picker)", fontWeight = FontWeight.Bold)
+                                Text("Upload File (Native File Picker)", fontWeight = FontWeight.Bold)
                             }
                         }
                     }

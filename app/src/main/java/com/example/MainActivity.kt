@@ -181,6 +181,13 @@ fun AlnoorAppMainScreen(
     val notices by repository.notices.collectAsState()
     val importantNoticePopup by repository.importantNoticePopup.collectAsState()
     val messages by repository.messages.collectAsState()
+    val unreadMessagesCount = remember(messages, currentRole) {
+        if (currentRole == UserRole.ADMIN) {
+            messages.count { !it.isFromAdmin && !it.isRead }
+        } else {
+            messages.count { it.isFromAdmin && !it.isRead }
+        }
+    }
     val daroodState by repository.daroodState.collectAsState()
     val daroodBannerUrl by repository.daroodBannerImageUrl.collectAsState()
     val currentlyPlayingMedia by repository.currentlyPlayingMedia.collectAsState()
@@ -371,6 +378,10 @@ fun AlnoorAppMainScreen(
                     onOpenLiveChannel = {
                         openOfficialYouTubeChannel(context)
                     },
+                    onMessagesClick = {
+                        selectedTab = AppTab.MESSAGES
+                    },
+                    unreadMessagesCount = unreadMessagesCount,
                     onSearchClick = {
                         selectedTab = AppTab.SEARCH
                     },
@@ -429,7 +440,7 @@ fun AlnoorAppMainScreen(
                         booksCount = books.size,
                         mediaCount = mediaArchives.size,
                         galleryCount = galleryAssets.size,
-                        inquiriesCount = messages.size,
+                        inquiriesCount = unreadMessagesCount,
                         actionCardConfigs = actionCardConfigs,
                         onNavigateToTab = { tab -> selectedTab = tab }
                     )

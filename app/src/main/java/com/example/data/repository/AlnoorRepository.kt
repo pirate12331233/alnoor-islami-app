@@ -1516,7 +1516,7 @@ class AlnoorRepository private constructor(private val context: Context) {
 
         val newMessage = AdminMessage(
             id = UUID.randomUUID().toString(),
-            senderName = senderName.ifBlank { if (isFromAdmin) "Mosque Administration" else "Community Member" },
+            senderName = senderName.ifBlank { if (isFromAdmin) "Alnoor Admin" else "Community Member" },
             senderContact = senderContact.ifBlank { "Not provided" },
             category = category,
             subject = subject,
@@ -1613,7 +1613,7 @@ class AlnoorRepository private constructor(private val context: Context) {
             val threadId = if (current.threadId.isNotBlank()) current.threadId else "contact_${current.senderContact.trim().lowercase().filter { it.isLetterOrDigit() }}"
             sendChatMessage(
                 threadId = threadId,
-                senderName = "Mosque Administration",
+                senderName = "Alnoor Admin",
                 senderContact = "helpline@alnoor.org",
                 text = replyText,
                 isFromAdmin = true,
@@ -2549,7 +2549,7 @@ class AlnoorRepository private constructor(private val context: Context) {
         ),
         ActionCardConfig(
             cardKey = "MESSAGES",
-            defaultTitle = "Mosque Helpline & Contact Admin",
+            defaultTitle = "Alnoor Islami Admin & Helpline",
             customTitle = "",
             defaultSubtitle = "Submit religious questions, inquiries, and private feedback",
             customSubtitle = "",
