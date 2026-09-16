@@ -1555,7 +1555,11 @@ class AlnoorRepository private constructor(private val context: Context) {
         }
         // Push Admin reply to Firestore so user's client receives it instantly
         firestoreSync.updateInquiryReplyInCloud(messageId, MessageStatus.RESOLVED, replyText, repositoryScope)
-        triggerFcmPushNotification("Admin Response Received", "The Admin has replied to inquiry #$messageId")
+        triggerFcmPushNotification(
+            "Admin Response Received",
+            "The Admin has replied to inquiry #$messageId",
+            targetTab = "MESSAGES"
+        )
     }
 
     fun deleteMessage(messageId: String) {
