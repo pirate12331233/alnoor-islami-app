@@ -103,6 +103,7 @@ import com.example.ui.theme.Gold300
 import com.example.ui.theme.Gold400
 import com.example.ui.theme.Gold500
 import com.example.ui.theme.Gold600
+import com.example.ui.theme.LightBg
 import com.example.ui.theme.SuccessGreen
 import com.example.ui.theme.UrgentRed
 import kotlinx.coroutines.launch
@@ -486,7 +487,7 @@ fun UserWhatsAppChatView(
             modifier = Modifier
                 .weight(1f)
                 .fillMaxWidth()
-                .background(Color(0xFFF6F8F7))
+                .background(LightBg)
         ) {
             if (chatBubbles.isEmpty()) {
                 // Empty state greeting card
@@ -615,7 +616,8 @@ fun UserWhatsAppChatView(
                     placeholder = {
                         Text(
                             text = "Type a message to Alnoor Admin...",
-                            fontSize = 13.sp
+                            fontSize = 13.sp,
+                            color = Color(0xFF64748B)
                         )
                     },
                     modifier = Modifier
@@ -624,8 +626,13 @@ fun UserWhatsAppChatView(
                     shape = RoundedCornerShape(24.dp),
                     maxLines = 5,
                     colors = OutlinedTextFieldDefaults.colors(
+                        focusedTextColor = Color(0xFF0F172A),
+                        unfocusedTextColor = Color(0xFF0F172A),
+                        cursorColor = Emerald800,
                         focusedBorderColor = Emerald800,
-                        unfocusedBorderColor = Color.LightGray.copy(alpha = 0.6f),
+                        unfocusedBorderColor = Color(0xFFCBD5E1),
+                        focusedPlaceholderColor = Color(0xFF64748B),
+                        unfocusedPlaceholderColor = Color(0xFF64748B),
                         focusedContainerColor = Color(0xFFFAFAFA),
                         unfocusedContainerColor = Color(0xFFFAFAFA)
                     )
@@ -1469,7 +1476,7 @@ fun AdminOneToOneChatView(
             modifier = Modifier
                 .weight(1f)
                 .fillMaxWidth()
-                .background(Color(0xFFF1F5F3))
+                .background(LightBg)
         ) {
             LazyColumn(
                 state = listState,
@@ -1492,15 +1499,21 @@ fun AdminOneToOneChatView(
 
         // --- QUICK REPLY TEMPLATE CHIPS ---
         Surface(
-            color = Color(0xFFE2E8F0).copy(alpha = 0.6f),
+            color = Emerald900.copy(alpha = 0.07f),
             modifier = Modifier.fillMaxWidth()
         ) {
             LazyRow(
-                contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
+                contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp),
                 horizontalArrangement = Arrangement.spacedBy(6.dp)
             ) {
                 item {
-                    Text("Quick:", fontSize = 11.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 6.dp))
+                    Text(
+                        text = "Quick:",
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = Emerald900,
+                        modifier = Modifier.padding(top = 5.dp, start = 2.dp)
+                    )
                 }
                 item {
                     TemplateChip("Assalamu Alaikum wa Rahmatullah") { replyInput = it }
@@ -1532,15 +1545,26 @@ fun AdminOneToOneChatView(
                 OutlinedTextField(
                     value = replyInput,
                     onValueChange = { replyInput = it },
-                    placeholder = { Text("Type reply to ${thread.userName}...", fontSize = 13.sp) },
+                    placeholder = { 
+                        Text(
+                            text = "Type reply to ${thread.userName}...", 
+                            fontSize = 13.sp,
+                            color = Color(0xFF64748B)
+                        ) 
+                    },
                     modifier = Modifier
                         .weight(1f)
                         .padding(end = 8.dp),
                     shape = RoundedCornerShape(24.dp),
                     maxLines = 5,
                     colors = OutlinedTextFieldDefaults.colors(
+                        focusedTextColor = Color(0xFF0F172A),
+                        unfocusedTextColor = Color(0xFF0F172A),
+                        cursorColor = Emerald800,
                         focusedBorderColor = Emerald800,
-                        unfocusedBorderColor = Color.LightGray.copy(alpha = 0.6f),
+                        unfocusedBorderColor = Color(0xFFCBD5E1),
+                        focusedPlaceholderColor = Color(0xFF64748B),
+                        unfocusedPlaceholderColor = Color(0xFF64748B),
                         focusedContainerColor = Color(0xFFFAFAFA),
                         unfocusedContainerColor = Color(0xFFFAFAFA)
                     )
@@ -1741,13 +1765,16 @@ fun TemplateChip(
     Surface(
         shape = RoundedCornerShape(14.dp),
         color = Color.White,
+        border = androidx.compose.foundation.BorderStroke(1.dp, Emerald800.copy(alpha = 0.2f)),
+        shadowElevation = 1.dp,
         modifier = Modifier.clickable { onClick(text) }
     ) {
         Text(
             text = text,
-            fontSize = 11.sp,
+            fontSize = 11.5.sp,
+            fontWeight = FontWeight.Medium,
             color = Emerald900,
-            modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
+            modifier = Modifier.padding(horizontal = 11.dp, vertical = 5.dp)
         )
     }
 }

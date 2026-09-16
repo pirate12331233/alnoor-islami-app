@@ -735,7 +735,7 @@ class AlnoorRepository private constructor(private val context: Context) {
         _currentUserRole.value = role
     }
 
-    fun triggerFcmPushNotification(title: String, body: String, targetTab: String? = null) {
+    fun triggerFcmPushNotification(title: String, body: String, targetTab: String? = null, isBroadcast: Boolean = true) {
         _latestNotification.value = "$title: $body"
         com.example.util.NotificationHelper.showHeadsUpNotification(
             context = context,
@@ -743,8 +743,10 @@ class AlnoorRepository private constructor(private val context: Context) {
             body = body,
             targetTab = targetTab
         )
-        // Broadcast notification to Firestore cloud so all closed/backgrounded devices receive it
-        firestoreSync.pushBroadcastNotificationToCloud(title, body, targetTab, repositoryScope)
+        // Broadcast notification to Firestore cloud so all closed/backgrounded devices receive it (only if isBroadcast is true)
+        if (isBroadcast) {
+            firestoreSync.pushBroadcastNotificationToCloud(title, body, targetTab, repositoryScope)
+        }
     }
 
     fun clearNotification() {
@@ -1563,13 +1565,15 @@ class AlnoorRepository private constructor(private val context: Context) {
             triggerFcmPushNotification(
                 "Admin Response Received",
                 "Alnoor Admin: ${text.take(60)}",
-                targetTab = "MESSAGES"
+                targetTab = "MESSAGES",
+                isBroadcast = false
             )
         } else {
             triggerFcmPushNotification(
                 "New Helpline Message",
                 "${senderName}: ${text.take(60)}",
-                targetTab = "MESSAGES"
+                targetTab = "MESSAGES",
+                isBroadcast = false
             )
         }
     }
