@@ -27,17 +27,23 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AdminPanelSettings
+import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.CloudDownload
 import androidx.compose.material.icons.filled.Download
+import androidx.compose.material.icons.filled.FolderOpen
+import androidx.compose.material.icons.filled.HelpOutline
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.LockOpen
 import androidx.compose.material.icons.filled.OpenInBrowser
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Security
 import androidx.compose.material.icons.filled.SystemUpdate
 import androidx.compose.material.icons.filled.Warning
+import java.io.File
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -111,6 +117,12 @@ fun AppUpdateMandatoryScreen(
     var downloadProgress by remember { mutableFloatStateOf(0f) }
     var statusMessage by remember { mutableStateOf("") }
     var errorMessage by remember { mutableStateOf<String?>(null) }
+
+    // Download & Install state
+    var existingApkFile by remember { mutableStateOf(ApkInstallerUtils.findExistingDownloadedApk(context)) }
+    var showBrowserGuideDialog by remember { mutableStateOf(false) }
+    var showPermissionNoticeDialog by remember { mutableStateOf(false) }
+    var hasInstallPermission by remember { mutableStateOf(ApkInstallerUtils.canInstallUnknownApps(context)) }
 
     // Admin Emergency Unlock state
     var showAdminAuthDialog by remember { mutableStateOf(false) }
@@ -363,9 +375,130 @@ fun AppUpdateMandatoryScreen(
                 }
             }
 
-            Spacer(modifier = Modifier.height(24.dp))
+            Spacer(modifier = Modifier.height(20.dp))
 
-            // Download Progress Section
+            // 1. Detected Existing APK in Storage (Instant Install)
+            existingApkFile?.let { apkFile ->
+                Card(
+                    shape = RoundedCornerShape(14.dp),
+                    colors = CardDefaults.cardColors(containerColor = Gold500.copy(alpha = 0.15f)),
+                    border = BorderStroke(1.dp, Gold400),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(bottom = 14.dp)
+                ) {
+                    Column(modifier = Modifier.padding(14.dp)) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(
+                                imageVector = Icons.Default.CheckCircle,
+                                contentDescription = null,
+                                tint = Gold400,
+                                modifier = Modifier.size(20.dp)
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                text = "Downloaded APK Found (${String.format("%.1f MB", apkFile.length() / (1024 * 1024f))})",
+                                fontWeight = FontWeight.Bold,
+                                color = Color.White,
+                                fontSize = 14.sp
+                            )
+                        }
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(
+                            text = "An update package (${apkFile.name}) is already present on your phone. You can install it directly without re-downloading!",
+                            color = Color.White.copy(alpha = 0.85f),
+                            fontSize = 12.sp,
+                            lineHeight = 16.sp
+                        )
+                        Spacer(modifier = Modifier.height(10.dp))
+                        Button(
+                            onClick = {
+                                val success = ApkInstallerUtils.installApk(context, apkFile) {
+                                    showPermissionNoticeDialog = true
+                                }
+                                if (!success && !ApkInstallerUtils.canInstallUnknownApps(context)) {
+                                    showPermissionNoticeDialog = true
+                                }
+                            },
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = Gold500,
+                                contentColor = Color.Black
+                            ),
+                            shape = RoundedCornerShape(10.dp),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(44.dp)
+                                .testTag("install_detected_apk_button")
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.SystemUpdate,
+                                contentDescription = null,
+                                modifier = Modifier.size(18.dp)
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                text = "Install Detected File Now",
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 13.sp
+                            )
+                        }
+                    }
+                }
+            }
+
+            // 2. Android 8.0+ Unknown Apps Permission Warning Ribbon
+            if (!hasInstallPermission) {
+                Surface(
+                    shape = RoundedCornerShape(12.dp),
+                    color = Gold500.copy(alpha = 0.15f),
+                    border = BorderStroke(1.dp, Gold400.copy(alpha = 0.5f)),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(bottom = 12.dp)
+                ) {
+                    Row(
+                        modifier = Modifier.padding(12.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Security,
+                            contentDescription = null,
+                            tint = Gold400,
+                            modifier = Modifier.size(20.dp)
+                        )
+                        Spacer(modifier = Modifier.width(10.dp))
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = "Install Permission Required",
+                                fontWeight = FontWeight.Bold,
+                                color = Gold300,
+                                fontSize = 12.sp
+                            )
+                            Text(
+                                text = "Allow 'Install unknown apps' for Alnoor App so updates can install automatically.",
+                                color = Color.White.copy(alpha = 0.8f),
+                                fontSize = 11.sp,
+                                lineHeight = 15.sp
+                            )
+                        }
+                        TextButton(
+                            onClick = {
+                                ApkInstallerUtils.openInstallPermissionSettings(context)
+                                hasInstallPermission = ApkInstallerUtils.canInstallUnknownApps(context)
+                            }
+                        ) {
+                            Text(
+                                text = "Enable",
+                                color = Gold400,
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 12.sp
+                            )
+                        }
+                    }
+                }
+            }
+
+            // 3. Download Progress Section
             if (isDownloading) {
                 Card(
                     shape = RoundedCornerShape(14.dp),
@@ -428,6 +561,7 @@ fun AppUpdateMandatoryScreen(
             }
 
             // Action Buttons
+            // Button A: In-App Fast Direct Download & Install
             Button(
                 onClick = {
                     if (!isDownloading) {
@@ -449,6 +583,8 @@ fun AppUpdateMandatoryScreen(
                                 },
                                 onSuccess = {
                                     isDownloading = false
+                                    // Refresh existing APK detection
+                                    existingApkFile = ApkInstallerUtils.findExistingDownloadedApk(context)
                                 }
                             )
                         }
@@ -481,8 +617,8 @@ fun AppUpdateMandatoryScreen(
                     )
                     Spacer(modifier = Modifier.width(8.dp))
                     Text(
-                        text = "Download & Install Update Now",
-                        fontSize = 15.sp,
+                        text = "Download & Install Update (Fast Direct)",
+                        fontSize = 14.sp,
                         fontWeight = FontWeight.Bold
                     )
                 }
@@ -490,15 +626,78 @@ fun AppUpdateMandatoryScreen(
 
             Spacer(modifier = Modifier.height(10.dp))
 
-            // Direct Browser Link Fallback
+            // Button B: Open Device Downloads / Pick Downloaded File
             OutlinedButton(
                 onClick = {
-                    ApkInstallerUtils.openInBrowser(context, versionInfo.apkDownloadUrl)
+                    // Try to re-scan
+                    val found = ApkInstallerUtils.findExistingDownloadedApk(context)
+                    if (found != null) {
+                        existingApkFile = found
+                        ApkInstallerUtils.installApk(context, found) {
+                            showPermissionNoticeDialog = true
+                        }
+                    } else {
+                        ApkInstallerUtils.openSystemDownloadsFolder(context)
+                    }
                 },
                 shape = RoundedCornerShape(12.dp),
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(46.dp)
+                    .height(44.dp)
+                    .testTag("open_downloads_apk_button")
+            ) {
+                Icon(
+                    imageVector = Icons.Default.FolderOpen,
+                    contentDescription = "Downloads",
+                    tint = Gold300,
+                    modifier = Modifier.size(18.dp)
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(
+                    text = "Open Device Downloads / Install Saved File",
+                    color = Gold300,
+                    fontSize = 13.sp
+                )
+            }
+
+            Spacer(modifier = Modifier.height(10.dp))
+
+            // Button C: Download via System DownloadManager (Notification Bar)
+            OutlinedButton(
+                onClick = {
+                    ApkInstallerUtils.downloadViaSystemDownloadManager(context, versionInfo.apkDownloadUrl)
+                },
+                shape = RoundedCornerShape(12.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(44.dp)
+                    .testTag("download_system_dm_button")
+            ) {
+                Icon(
+                    imageVector = Icons.Default.CloudDownload,
+                    contentDescription = "System Download Manager",
+                    tint = Color.White,
+                    modifier = Modifier.size(18.dp)
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(
+                    text = "Download via Phone Notification Bar",
+                    color = Color.White,
+                    fontSize = 13.sp
+                )
+            }
+
+            Spacer(modifier = Modifier.height(10.dp))
+
+            // Button D: Direct Browser Link (with Helpful Troubleshooting Guide)
+            OutlinedButton(
+                onClick = {
+                    showBrowserGuideDialog = true
+                },
+                shape = RoundedCornerShape(12.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(44.dp)
                     .testTag("download_update_browser_button")
             ) {
                 Icon(
@@ -509,7 +708,7 @@ fun AppUpdateMandatoryScreen(
                 )
                 Spacer(modifier = Modifier.width(8.dp))
                 Text(
-                    text = "Download via Direct Web Link / Browser",
+                    text = "Download via Web Browser (Brave / Chrome)",
                     color = Color.White,
                     fontSize = 13.sp
                 )
@@ -520,6 +719,8 @@ fun AppUpdateMandatoryScreen(
             // Refresh / Re-check button
             OutlinedButton(
                 onClick = {
+                    existingApkFile = ApkInstallerUtils.findExistingDownloadedApk(context)
+                    hasInstallPermission = ApkInstallerUtils.canInstallUnknownApps(context)
                     onRetryCheck()
                     Toast.makeText(context, "Checking cloud for latest release...", Toast.LENGTH_SHORT).show()
                 },
@@ -813,6 +1014,118 @@ fun AppUpdateMandatoryScreen(
             dismissButton = {
                 TextButton(onClick = { showAdminConfigDialog = false }) {
                     Text("Close")
+                }
+            }
+        )
+    }
+
+    // --- Browser Download Guidance Dialog (Addresses Brave / Chrome 100% pause issue) ---
+    if (showBrowserGuideDialog) {
+        AlertDialog(
+            onDismissRequest = { showBrowserGuideDialog = false },
+            icon = {
+                Icon(Icons.Default.HelpOutline, contentDescription = null, tint = Gold400)
+            },
+            title = {
+                Text("Browser Download Guide", fontWeight = FontWeight.Bold)
+            },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Text(
+                        text = "Important note for Brave & Chrome browser users:",
+                        fontWeight = FontWeight.SemiBold,
+                        style = MaterialTheme.typography.bodyMedium
+                    )
+
+                    Surface(
+                        shape = RoundedCornerShape(8.dp),
+                        color = Color.Black.copy(alpha = 0.2f),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Column(modifier = Modifier.padding(10.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                            Text(
+                                text = "1. Why downloads pause at 100%:",
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 12.sp,
+                                color = Gold400
+                            )
+                            Text(
+                                text = "Brave Shields and Chrome pause APK downloads to prompt for security confirmation ('File might be harmful' or a pause button).",
+                                fontSize = 11.sp,
+                                color = Color.White.copy(alpha = 0.9f)
+                            )
+
+                            Text(
+                                text = "2. How to finish installing:",
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 12.sp,
+                                color = Gold400
+                            )
+                            Text(
+                                text = "• Swipe down your phone's notification bar and tap the completed download.\n• Or in your browser, tap menu (⋮) -> Downloads -> tap 'Keep' or tap the file to install.\n• Or return to Alnoor App and tap 'Install Detected File Now'!",
+                                fontSize = 11.sp,
+                                color = Color.White.copy(alpha = 0.9f)
+                            )
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        showBrowserGuideDialog = false
+                        ApkInstallerUtils.openInBrowser(context, versionInfo.apkDownloadUrl)
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = Gold500, contentColor = Color.Black)
+                ) {
+                    Text("Proceed to Browser", fontWeight = FontWeight.Bold)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showBrowserGuideDialog = false }) {
+                    Text("Cancel")
+                }
+            }
+        )
+    }
+
+    // --- Android 8.0+ Unknown Apps Permission Dialog ---
+    if (showPermissionNoticeDialog) {
+        AlertDialog(
+            onDismissRequest = { showPermissionNoticeDialog = false },
+            icon = {
+                Icon(Icons.Default.Security, contentDescription = null, tint = Gold400)
+            },
+            title = {
+                Text("Enable Install Permission", fontWeight = FontWeight.Bold)
+            },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(
+                        text = "Android requires permission to install updates directly from Alnoor App.",
+                        style = MaterialTheme.typography.bodyMedium
+                    )
+                    Text(
+                        text = "Please tap 'Open Settings' and turn ON 'Allow from this source'. Then press your phone's Back button to complete the installation.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = Color.White.copy(alpha = 0.85f)
+                    )
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        showPermissionNoticeDialog = false
+                        ApkInstallerUtils.openInstallPermissionSettings(context)
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = Gold500, contentColor = Color.Black)
+                ) {
+                    Text("Open Settings", fontWeight = FontWeight.Bold)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showPermissionNoticeDialog = false }) {
+                    Text("Cancel")
                 }
             }
         )
