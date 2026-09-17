@@ -1,0 +1,8 @@
+{
+  "name": "Remix Alnoor Islami App",
+  "description": "Comprehensive Islamic community application featuring live YouTube broadcasts, prayer times with azan, event management, photo galleries, Islamic library, media archives, notices, Darood counter, and admin RBAC portal.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
