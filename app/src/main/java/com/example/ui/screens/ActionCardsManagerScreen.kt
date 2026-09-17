@@ -27,11 +27,13 @@ import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material.icons.filled.CloudDone
 import androidx.compose.material.icons.filled.Event
 import androidx.compose.material.icons.filled.Fingerprint
+import androidx.compose.material.icons.filled.FormatQuote
 import androidx.compose.material.icons.filled.LibraryBooks
 import androidx.compose.material.icons.filled.LiveTv
 import androidx.compose.material.icons.filled.Mail
 import androidx.compose.material.icons.filled.MenuBook
 import androidx.compose.material.icons.filled.Mosque
+import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Radio
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Restore
@@ -852,8 +854,10 @@ private fun ActionCardEditorItem(
 
 private fun getCardIcon(cardKey: String): ImageVector {
     return when (cardKey) {
+        "YOUTUBE_CHANNEL" -> Icons.Default.PlayArrow
         "LIVE_STREAM" -> Icons.Default.LiveTv
         "DAROOD" -> Icons.Default.Fingerprint
+        "HADITH" -> Icons.Default.FormatQuote
         "EVENTS" -> Icons.Default.Event
         "NOTICES" -> Icons.Default.Campaign
         "PRAYER" -> Icons.Default.Mosque

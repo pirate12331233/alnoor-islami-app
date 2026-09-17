@@ -140,6 +140,16 @@ object HadithRepository {
         )
     )
 
+    fun getTotalHadithCount(): Int = CURATED_SUNNI_AHADITH.size
+
+    fun getHadithByIndex(index: Int): HadithData {
+        if (CURATED_SUNNI_AHADITH.isEmpty()) {
+            throw IllegalStateException("Curated Ahadith collection is empty")
+        }
+        val safeIndex = Math.floorMod(index, CURATED_SUNNI_AHADITH.size)
+        return CURATED_SUNNI_AHADITH[safeIndex]
+    }
+
     /**
      * Gets the Hadith for today using the calendar day-of-year index, ensuring daily rotation,
      * and attempts to fetch/cache fresh authentic Ahadith from online Islamic API if available.

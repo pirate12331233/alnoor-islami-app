@@ -198,27 +198,6 @@ fun HomeDashboardScreen(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalAlignment = Alignment.CenterHorizontally
                     ) {
-                        // Official Alnoor Islami App Logo (Dynamic Resolution & Uncropped)
-                        Box(
-                            modifier = Modifier
-                                .size(100.dp)
-                                .background(
-                                    Color.White.copy(alpha = 0.08f),
-                                    RoundedCornerShape(20.dp)
-                                )
-                                .padding(6.dp),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Image(
-                                painter = painterResource(id = R.drawable.app_logo),
-                                contentDescription = "Alnoor Islami Official Logo",
-                                modifier = Modifier.fillMaxSize(),
-                                contentScale = ContentScale.Fit
-                            )
-                        }
-
-                        Spacer(modifier = Modifier.height(10.dp))
-
                         // Arabic Bismillah Calligraphy
                         Text(
                             text = "بِسْمِ اللَّهِ الرَّحْمَٰنِ الرَّحِيمِ",
@@ -298,204 +277,20 @@ fun HomeDashboardScreen(
             }
         }
 
-        // --- 1.5. [DAILY HADITH SECTION] Authentic Sunni Hadith with Arabic, Urdu & English + Save as Image ---
-        item {
-            DailyHadithCard(
-                onNavigateToLibrary = { onNavigateToTab(AppTab.LIBRARY) }
-            )
-        }
-
-        // --- 2. [TOP ACTION CARD] LIVE YOUTUBE STREAM & BROADCAST ---
-        if (isCardVisible("LIVE_STREAM")) {
-            val liveCardConfig = getCard("LIVE_STREAM")
-            val liveTitle = liveCardConfig?.displayTitle ?: "Official Live Broadcast"
-            val liveSubtitle = liveCardConfig?.displaySubtitle
-                ?: "Stream Jummah Bayan, Mahafil-e-Naat, and daily Islamic programs live on official YouTube channel."
+        // --- 1.5. [ACTION CARD] DAILY HADITH SHAREEF (EXPANDABLE ACTION CARD) ---
+        if (isCardVisible("HADITH")) {
+            val hadithCard = getCard("HADITH")
+            val hadithTitle = hadithCard?.displayTitle ?: "Daily Hadith Shareef (حدیث شریف)"
+            val hadithSubtitle = hadithCard?.displaySubtitle
+                ?: "Tap to read authentic Bukhari & Muslim Hadith with Arabic, Urdu & English translations"
 
             item {
-                Card(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .shadow(6.dp, RoundedCornerShape(20.dp))
-                        .testTag("action_card_live_stream_featured"),
-                    shape = RoundedCornerShape(20.dp),
-                    colors = CardDefaults.cardColors(
-                        containerColor = if (hasActiveLiveStream) Color(0xFF1E0A0A) else Emerald900
-                    ),
-                    border = androidx.compose.foundation.BorderStroke(
-                        1.5.dp,
-                        if (isCardHiddenFromMembers("LIVE_STREAM")) Color(0xFFF59E0B)
-                        else if (hasActiveLiveStream) LiveRed
-                        else Gold500.copy(alpha = 0.5f)
-                    )
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .background(
-                                Brush.verticalGradient(
-                                    listOf(
-                                        if (hasActiveLiveStream) Color(0xFF2C0A0A) else Color(0xFF172C24),
-                                        Color(0xFF0F1B17)
-                                    )
-                                )
-                            )
-                            .padding(18.dp)
-                    ) {
-                        Column(modifier = Modifier.fillMaxWidth()) {
-                            // Header row with Live Badge & YouTube Branding
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.SpaceBetween
-                            ) {
-                                Row(verticalAlignment = Alignment.CenterVertically) {
-                                    Surface(
-                                        shape = RoundedCornerShape(8.dp),
-                                        color = if (hasActiveLiveStream) LiveRed else YoutubeRed
-                                    ) {
-                                        Row(
-                                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
-                                            verticalAlignment = Alignment.CenterVertically
-                                        ) {
-                                            Box(
-                                                modifier = Modifier
-                                                    .size(8.dp)
-                                                    .clip(CircleShape)
-                                                    .background(Color.White)
-                                                    .alpha(if (hasActiveLiveStream) pulseAlpha else 1f)
-                                            )
-                                            Spacer(modifier = Modifier.width(5.dp))
-                                            Text(
-                                                text = if (hasActiveLiveStream) "LIVE NOW" else "YOUTUBE LIVE",
-                                                color = Color.White,
-                                                fontSize = 11.sp,
-                                                fontWeight = FontWeight.Bold,
-                                                letterSpacing = 0.5.sp
-                                            )
-                                        }
-                                    }
-
-                                    Spacer(modifier = Modifier.width(8.dp))
-
-                                    Text(
-                                        text = "Official Broadcast",
-                                        color = Gold300,
-                                        fontSize = 12.sp,
-                                        fontWeight = FontWeight.SemiBold
-                                    )
-                                }
-
-                                Row(verticalAlignment = Alignment.CenterVertically) {
-                                    if (isCardHiddenFromMembers("LIVE_STREAM")) {
-                                        Surface(
-                                            shape = RoundedCornerShape(6.dp),
-                                            color = Color(0xFFF59E0B).copy(alpha = 0.2f),
-                                            border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFF59E0B)),
-                                            modifier = Modifier.padding(end = 6.dp)
-                                        ) {
-                                            Row(
-                                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
-                                                verticalAlignment = Alignment.CenterVertically
-                                            ) {
-                                                Icon(
-                                                    imageVector = Icons.Default.VisibilityOff,
-                                                    contentDescription = null,
-                                                    tint = Color(0xFFF59E0B),
-                                                    modifier = Modifier.size(12.dp)
-                                                )
-                                                Spacer(modifier = Modifier.width(3.dp))
-                                                Text(
-                                                    text = "Hidden from Members",
-                                                    fontSize = 10.sp,
-                                                    color = Color(0xFFF59E0B),
-                                                    fontWeight = FontWeight.Bold
-                                                )
-                                            }
-                                        }
-                                    }
-
-                                    Surface(
-                                        shape = CircleShape,
-                                        color = YoutubeRed.copy(alpha = 0.15f),
-                                        modifier = Modifier.size(36.dp)
-                                    ) {
-                                        Box(contentAlignment = Alignment.Center) {
-                                            Icon(
-                                                imageVector = Icons.Default.LiveTv,
-                                                contentDescription = "Live YouTube Stream",
-                                                tint = if (hasActiveLiveStream) LiveRed else Gold400,
-                                                modifier = Modifier.size(20.dp)
-                                            )
-                                        }
-                                    }
-                                }
-                            }
-
-                            Spacer(modifier = Modifier.height(10.dp))
-
-                            // Stream Title & Description
-                            Text(
-                                text = liveTitle,
-                                color = Color.White,
-                                fontSize = 16.sp,
-                                fontWeight = FontWeight.Bold,
-                                maxLines = 2,
-                                overflow = TextOverflow.Ellipsis
-                            )
-
-                            Spacer(modifier = Modifier.height(4.dp))
-
-                            Text(
-                                text = liveSubtitle,
-                                color = Color.White.copy(alpha = 0.75f),
-                                fontSize = 12.sp,
-                                lineHeight = 16.sp
-                            )
-
-                            Spacer(modifier = Modifier.height(14.dp))
-
-                            // Centered Red YouTube Channel Button with deep link
-                            Box(
-                                modifier = Modifier.fillMaxWidth(),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Button(
-                                    onClick = {
-                                        openOfficialYouTubeChannel(
-                                            context = context,
-                                            targetUrl = "https://www.youtube.com/@AlnoorislamiMushahidat/live"
-                                        )
-                                    },
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .height(46.dp)
-                                        .testTag("open_official_youtube_channel_button"),
-                                    colors = ButtonDefaults.buttonColors(
-                                        containerColor = LiveRed
-                                    ),
-                                    shape = RoundedCornerShape(12.dp),
-                                    elevation = ButtonDefaults.buttonElevation(defaultElevation = 2.dp),
-                                    contentPadding = PaddingValues(horizontal = 16.dp, vertical = 6.dp)
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Default.PlayArrow,
-                                        contentDescription = "YouTube Live",
-                                        tint = Color.White,
-                                        modifier = Modifier.size(20.dp)
-                                    )
-                                    Spacer(modifier = Modifier.width(8.dp))
-                                    Text(
-                                        text = "YouTube Channel",
-                                        color = Color.White,
-                                        fontSize = 14.sp,
-                                        fontWeight = FontWeight.Bold
-                                    )
-                                }
-                            }
-                        }
-                    }
-                }
+                DailyHadithCard(
+                    title = hadithTitle,
+                    subtitle = hadithSubtitle,
+                    isHiddenFromMembers = isCardHiddenFromMembers("HADITH"),
+                    onNavigateToLibrary = { onNavigateToTab(AppTab.LIBRARY) }
+                )
             }
         }
 
@@ -546,6 +341,54 @@ fun HomeDashboardScreen(
                         )
                     }
                 }
+            }
+        }
+
+        // --- [VERTICAL ACTION CARD] YOUTUBE CHANNEL ---
+        if (isCardVisible("YOUTUBE_CHANNEL")) {
+            val ytCard = getCard("YOUTUBE_CHANNEL")
+            item {
+                VerticalActionCard(
+                    icon = Icons.Default.PlayArrow,
+                    iconTint = Color.White,
+                    iconBackground = YoutubeRed,
+                    title = ytCard?.displayTitle ?: "Youtube Channel",
+                    subtitle = ytCard?.displaySubtitle
+                        ?: "Official Alnoor Islami YouTube channel with recorded Bayanat, lectures, and programs",
+                    isHiddenFromMembers = isCardHiddenFromMembers("YOUTUBE_CHANNEL"),
+                    onClick = {
+                        openOfficialYouTubeChannel(context)
+                    },
+                    testTag = "action_card_youtube_channel"
+                )
+            }
+        }
+
+        // --- [VERTICAL ACTION CARD] LIVE YOUTUBE BROADCAST & STREAM ---
+        if (isCardVisible("LIVE_STREAM")) {
+            val liveCardConfig = getCard("LIVE_STREAM")
+            item {
+                VerticalActionCard(
+                    icon = Icons.Default.LiveTv,
+                    iconTint = if (hasActiveLiveStream) LiveRed else Gold400,
+                    iconBackground = if (hasActiveLiveStream) Color(0xFF2C0A0A) else Emerald900,
+                    title = liveCardConfig?.displayTitle ?: "Live YouTube Broadcast & Stream",
+                    subtitle = liveCardConfig?.displaySubtitle
+                        ?: "Shows when a live Jummah Khutbah, Dars-e-Quran, or Majlis is streaming, with direct in-app or YouTube playback.",
+                    badgeText = if (hasActiveLiveStream) "LIVE NOW" else null,
+                    isHiddenFromMembers = isCardHiddenFromMembers("LIVE_STREAM"),
+                    onClick = {
+                        openOfficialYouTubeChannel(
+                            context = context,
+                            targetUrl = if (hasActiveLiveStream && !activeLiveStream?.youtubeVideoId.isNullOrBlank()) {
+                                "https://www.youtube.com/watch?v=${activeLiveStream!!.youtubeVideoId}"
+                            } else {
+                                "https://www.youtube.com/@AlnoorislamiMushahidat/live"
+                            }
+                        )
+                    },
+                    testTag = "action_card_live_stream"
+                )
             }
         }
 
@@ -1126,16 +969,37 @@ fun VerticalActionCard(
                 modifier = Modifier.weight(1f),
                 verticalArrangement = Arrangement.Center
             ) {
-                Text(
-                    text = title,
-                    fontSize = 15.5.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.onSurface,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis,
-                    lineHeight = 21.sp,
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
                     modifier = Modifier.fillMaxWidth()
-                )
+                ) {
+                    Text(
+                        text = title,
+                        fontSize = 15.5.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis,
+                        lineHeight = 21.sp,
+                        modifier = Modifier.weight(1f, fill = false)
+                    )
+
+                    if (!badgeText.isNullOrBlank()) {
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Surface(
+                            shape = RoundedCornerShape(6.dp),
+                            color = LiveRed
+                        ) {
+                            Text(
+                                text = badgeText,
+                                color = Color.White,
+                                fontSize = 9.sp,
+                                fontWeight = FontWeight.Bold,
+                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                            )
+                        }
+                    }
+                }
 
                 Spacer(modifier = Modifier.height(4.dp))
 

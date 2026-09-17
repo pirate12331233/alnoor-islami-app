@@ -2503,13 +2503,22 @@ class AlnoorRepository private constructor(private val context: Context) {
 
     private fun getInitialActionCardConfigs(): List<ActionCardConfig> = listOf(
         ActionCardConfig(
-            cardKey = "LIVE_STREAM",
-            defaultTitle = "Official Live Broadcast",
+            cardKey = "YOUTUBE_CHANNEL",
+            defaultTitle = "Youtube Channel",
             customTitle = "",
-            defaultSubtitle = "Stream Jummah Bayan, Mahafil-e-Naat, and daily Islamic programs live on official YouTube channel.",
+            defaultSubtitle = "Official Alnoor Islami YouTube channel with recorded Bayanat, lectures, and programs",
             customSubtitle = "",
             isVisibleToMembers = true,
             orderIndex = 0
+        ),
+        ActionCardConfig(
+            cardKey = "LIVE_STREAM",
+            defaultTitle = "Live YouTube Broadcast & Stream",
+            customTitle = "",
+            defaultSubtitle = "Shows when a live Jummah Khutbah, Dars-e-Quran, or Majlis is streaming, with direct in-app or YouTube playback",
+            customSubtitle = "",
+            isVisibleToMembers = true,
+            orderIndex = 1
         ),
         ActionCardConfig(
             cardKey = "DAROOD",
@@ -2518,7 +2527,16 @@ class AlnoorRepository private constructor(private val context: Context) {
             defaultSubtitle = "Contribute daily recitations towards the group milestone",
             customSubtitle = "",
             isVisibleToMembers = true,
-            orderIndex = 1
+            orderIndex = 2
+        ),
+        ActionCardConfig(
+            cardKey = "HADITH",
+            defaultTitle = "Daily Hadith Shareef (حدیث شریف)",
+            customTitle = "",
+            defaultSubtitle = "Authentic Bukhari & Muslim Hadith in Arabic, Urdu & English with card generator",
+            customSubtitle = "",
+            isVisibleToMembers = true,
+            orderIndex = 3
         ),
         ActionCardConfig(
             cardKey = "EVENTS",
@@ -2527,7 +2545,7 @@ class AlnoorRepository private constructor(private val context: Context) {
             defaultSubtitle = "Upcoming gatherings, Shab-e-Barat, Halaqas & Dars schedules",
             customSubtitle = "",
             isVisibleToMembers = true,
-            orderIndex = 2
+            orderIndex = 4
         ),
         ActionCardConfig(
             cardKey = "NOTICES",
@@ -2536,7 +2554,7 @@ class AlnoorRepository private constructor(private val context: Context) {
             defaultSubtitle = "Important announcements, circulars, and Ramadan timetables",
             customSubtitle = "",
             isVisibleToMembers = true,
-            orderIndex = 3
+            orderIndex = 5
         ),
         ActionCardConfig(
             cardKey = "QURAN",

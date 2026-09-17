@@ -38,4 +38,14 @@ class HadithRepositoryTest {
         assertTrue(daily.urduTranslation.isNotBlank())
         assertTrue(daily.englishTranslation.isNotBlank())
     }
+
+    @Test
+    fun testGetHadithByIndexAndTotalCount() {
+        val total = HadithRepository.getTotalHadithCount()
+        assertTrue(total > 0)
+        val first = HadithRepository.getHadithByIndex(0)
+        assertNotNull(first)
+        val wrapped = HadithRepository.getHadithByIndex(total)
+        assertEquals(first.id, wrapped.id)
+    }
 }

@@ -39,6 +39,7 @@ import androidx.compose.material.icons.filled.Mail
 import androidx.compose.material.icons.filled.ManageAccounts
 import androidx.compose.material.icons.filled.MenuBook
 import androidx.compose.material.icons.filled.Mosque
+import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.NotificationsActive
 import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material.icons.filled.Pause
@@ -253,96 +254,86 @@ fun AlnoorTopBar(
                     }
                 }
 
-                // Action Icons (User Management if admin, Search, Role Badge)
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(3.dp)
+                // Top Right Action Section: Role Mode with Notifications Bell & Exit Button below it
+                Column(
+                    horizontalAlignment = Alignment.End,
+                    verticalArrangement = Arrangement.spacedBy(3.dp)
                 ) {
-                    if (currentRole == UserRole.ADMIN && onAdminUsersClick != null) {
-                        IconButton(
-                            onClick = onAdminUsersClick,
-                            modifier = Modifier.size(32.dp)
+                    // Role Switcher / Mode Button ("Admin Mode" or "Member")
+                    Surface(
+                        shape = RoundedCornerShape(12.dp),
+                        color = if (currentRole == UserRole.ADMIN) Gold500 else MaterialTheme.colorScheme.surfaceVariant,
+                        modifier = Modifier
+                            .clickable { onRoleClick() }
+                            .testTag("role_switcher_button")
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 7.dp, vertical = 3.5.dp),
+                            verticalAlignment = Alignment.CenterVertically
                         ) {
                             Icon(
-                                imageVector = Icons.Default.ManageAccounts,
-                                contentDescription = "Admin User Management",
-                                tint = Gold400,
-                                modifier = Modifier.size(18.dp)
+                                imageVector = if (currentRole == UserRole.ADMIN) Icons.Default.AdminPanelSettings else Icons.Default.Security,
+                                contentDescription = "Role Mode",
+                                tint = if (currentRole == UserRole.ADMIN) Emerald900 else accentColor,
+                                modifier = Modifier.size(13.dp)
+                            )
+                            Spacer(modifier = Modifier.width(3.dp))
+                            Text(
+                                text = if (currentRole == UserRole.ADMIN) "Admin Mode" else "Member",
+                                fontSize = 10.5.sp,
+                                fontWeight = FontWeight.Bold,
+                                maxLines = 1,
+                                softWrap = false,
+                                color = if (currentRole == UserRole.ADMIN) Emerald900 else MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         }
                     }
 
-                    // Messages Action Icon with Live Unread Indicator (Red when unread, Green when all read)
-                    IconButton(
-                        onClick = onMessagesClick,
-                        modifier = Modifier.size(32.dp)
+                    // Parallel aligned row under "Admin Mode": Notifications Bell & Exit Button
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(5.dp)
                     ) {
-                        BadgedBox(
-                            badge = {
-                                if (unreadMessagesCount > 0) {
-                                    Badge(
-                                        containerColor = UrgentRed,
-                                        contentColor = Color.White
-                                    ) {
-                                        Text(
-                                            text = if (unreadMessagesCount > 99) "99+" else "$unreadMessagesCount",
-                                            fontSize = 9.sp,
-                                            fontWeight = FontWeight.Bold
-                                        )
+                        // Notifications Bell with live unread badge counter
+                        Surface(
+                            shape = RoundedCornerShape(10.dp),
+                            color = if (unreadMessagesCount > 0) UrgentRed.copy(alpha = 0.22f) else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f),
+                            border = if (unreadMessagesCount > 0) androidx.compose.foundation.BorderStroke(1.dp, UrgentRed.copy(alpha = 0.65f)) else null,
+                            modifier = Modifier
+                                .clickable { onMessagesClick() }
+                                .testTag("topbar_notification_bell")
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                BadgedBox(
+                                    badge = {
+                                        if (unreadMessagesCount > 0) {
+                                            Badge(
+                                                containerColor = UrgentRed,
+                                                contentColor = Color.White
+                                            ) {
+                                                Text(
+                                                    text = if (unreadMessagesCount > 99) "99+" else "$unreadMessagesCount",
+                                                    fontSize = 8.sp,
+                                                    fontWeight = FontWeight.Bold
+                                                )
+                                            }
+                                        }
                                     }
-                                } else {
-                                    Badge(
-                                        containerColor = SuccessGreen,
-                                        modifier = Modifier.size(5.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Notifications,
+                                        contentDescription = "Notifications",
+                                        tint = if (unreadMessagesCount > 0) UrgentRed else accentColor,
+                                        modifier = Modifier.size(12.dp)
                                     )
                                 }
                             }
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.Mail,
-                                contentDescription = "Helpline & Messages",
-                                tint = if (unreadMessagesCount > 0) Color(0xFFFCA5A5) else SuccessGreen,
-                                modifier = Modifier.size(19.dp)
-                            )
-                        }
-                    }
-
-                    // Column containing the Member/Admin Mode button with the Exit button directly BELOW it
-                    Column(
-                        horizontalAlignment = Alignment.End,
-                        verticalArrangement = Arrangement.spacedBy(3.dp)
-                    ) {
-                        // Role Switcher / Badge Button
-                        Surface(
-                            shape = RoundedCornerShape(12.dp),
-                            color = if (currentRole == UserRole.ADMIN) Gold500 else MaterialTheme.colorScheme.surfaceVariant,
-                            modifier = Modifier
-                                .clickable { onRoleClick() }
-                                .testTag("role_switcher_button")
-                        ) {
-                            Row(
-                                modifier = Modifier.padding(horizontal = 7.dp, vertical = 3.5.dp),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Icon(
-                                    imageVector = if (currentRole == UserRole.ADMIN) Icons.Default.AdminPanelSettings else Icons.Default.Security,
-                                    contentDescription = "Role Mode",
-                                    tint = if (currentRole == UserRole.ADMIN) Emerald900 else accentColor,
-                                    modifier = Modifier.size(13.dp)
-                                )
-                                Spacer(modifier = Modifier.width(3.dp))
-                                Text(
-                                    text = if (currentRole == UserRole.ADMIN) "Admin Mode" else "Member",
-                                    fontSize = 10.5.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    maxLines = 1,
-                                    softWrap = false,
-                                    color = if (currentRole == UserRole.ADMIN) Emerald900 else MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                            }
                         }
 
-                        // Exit button positioned below Member button
+                        // Exit button positioned parallel to Notifications Bell
                         if (onSignOutClick != null) {
                             Surface(
                                 shape = RoundedCornerShape(10.dp),
