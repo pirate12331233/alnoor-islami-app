@@ -60,12 +60,27 @@ data class QuranReadingProgress(
     val timestamp: Long = System.currentTimeMillis()
 )
 
+data class QuranWordToken(
+    val arabic: String,
+    val urdu: String,
+    val transliteration: String = "",
+    val isTajweedSpecial: Boolean = false
+)
+
+enum class QuranViewMode {
+    MUSHAF_SPLIT_PAGE, // Two-column split: Arabic right, Urdu left (Image 2 style)
+    WORD_BY_WORD,      // Tabular Word-by-Word Lafzi Tarjuma (Image 1 style)
+    VERSE_BY_VERSE     // Original detailed verse cards
+}
+
 data class QuranReaderSettings(
     val arabicFontSize: Float = 24f,
     val urduFontSize: Float = 16f,
     val showUrduTranslation: Boolean = true,
     val isNightMode: Boolean = true,
-    val useParchmentMode: Boolean = false
+    val useParchmentMode: Boolean = false,
+    val viewMode: QuranViewMode = QuranViewMode.MUSHAF_SPLIT_PAGE,
+    val enableTajweedColors: Boolean = true
 )
 
 enum class QuranBrowseMode {

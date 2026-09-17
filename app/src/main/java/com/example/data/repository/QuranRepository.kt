@@ -273,6 +273,8 @@ class QuranRepository private constructor(private val context: Context) {
             putBoolean("show_urdu_translation", settings.showUrduTranslation)
             putBoolean("is_night_mode", settings.isNightMode)
             putBoolean("use_parchment_mode", settings.useParchmentMode)
+            putString("quran_view_mode", settings.viewMode.name)
+            putBoolean("enable_tajweed_colors", settings.enableTajweedColors)
             apply()
         }
     }
@@ -342,12 +344,21 @@ class QuranRepository private constructor(private val context: Context) {
     }
 
     private fun loadSettingsFromPrefs(): QuranReaderSettings {
+        val viewModeStr = prefs.getString("quran_view_mode", com.example.data.model.QuranViewMode.MUSHAF_SPLIT_PAGE.name)
+        val mode = try {
+            com.example.data.model.QuranViewMode.valueOf(viewModeStr ?: com.example.data.model.QuranViewMode.MUSHAF_SPLIT_PAGE.name)
+        } catch (e: Exception) {
+            com.example.data.model.QuranViewMode.MUSHAF_SPLIT_PAGE
+        }
+
         return QuranReaderSettings(
             arabicFontSize = prefs.getFloat("arabic_font_size", 24f),
             urduFontSize = prefs.getFloat("urdu_font_size", 16f),
             showUrduTranslation = prefs.getBoolean("show_urdu_translation", true),
             isNightMode = prefs.getBoolean("is_night_mode", true),
-            useParchmentMode = prefs.getBoolean("use_parchment_mode", false)
+            useParchmentMode = prefs.getBoolean("use_parchment_mode", false),
+            viewMode = mode,
+            enableTajweedColors = prefs.getBoolean("enable_tajweed_colors", true)
         )
     }
 

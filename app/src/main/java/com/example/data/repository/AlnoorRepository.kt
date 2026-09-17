@@ -2503,22 +2503,13 @@ class AlnoorRepository private constructor(private val context: Context) {
 
     private fun getInitialActionCardConfigs(): List<ActionCardConfig> = listOf(
         ActionCardConfig(
-            cardKey = "YOUTUBE_CHANNEL",
-            defaultTitle = "Youtube Channel",
+            cardKey = "ALNOOR_CHANNEL",
+            defaultTitle = "Alnoor Islami Channel",
             customTitle = "",
-            defaultSubtitle = "Official Alnoor Islami YouTube channel with recorded Bayanat, lectures, and programs",
+            defaultSubtitle = "Official YouTube channel, recorded Bayanat, and live Islamic broadcasts",
             customSubtitle = "",
             isVisibleToMembers = true,
             orderIndex = 0
-        ),
-        ActionCardConfig(
-            cardKey = "LIVE_STREAM",
-            defaultTitle = "Live YouTube Broadcast & Stream",
-            customTitle = "",
-            defaultSubtitle = "Shows when a live Jummah Khutbah, Dars-e-Quran, or Majlis is streaming, with direct in-app or YouTube playback",
-            customSubtitle = "",
-            isVisibleToMembers = true,
-            orderIndex = 1
         ),
         ActionCardConfig(
             cardKey = "DAROOD",

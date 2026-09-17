@@ -854,6 +854,7 @@ private fun ActionCardEditorItem(
 
 private fun getCardIcon(cardKey: String): ImageVector {
     return when (cardKey) {
+        "ALNOOR_CHANNEL" -> Icons.Default.LiveTv
         "YOUTUBE_CHANNEL" -> Icons.Default.PlayArrow
         "LIVE_STREAM" -> Icons.Default.LiveTv
         "DAROOD" -> Icons.Default.Fingerprint

@@ -101,7 +101,9 @@ import com.example.data.model.QuranBrowseMode
 import com.example.data.model.QuranPara
 import com.example.data.model.QuranReaderSettings
 import com.example.data.model.QuranSurah
+import com.example.data.model.QuranViewMode
 import com.example.data.repository.QuranRepository
+import com.example.ui.theme.AmiriQuranFontFamily
 import com.example.ui.theme.BorderDark
 import com.example.ui.theme.DarkBg
 import com.example.ui.theme.DarkCard
@@ -117,6 +119,7 @@ import com.example.ui.theme.Gold300
 import com.example.ui.theme.Gold400
 import com.example.ui.theme.Gold500
 import com.example.ui.theme.Gold600
+import com.example.ui.theme.NastaliqUrduFontFamily
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -358,6 +361,104 @@ fun QuranReaderScreen(
                             }
                         }
 
+                        // --- MUSHAF VIEW MODE SWITCHER (Split Page vs Word-by-Word vs Verse Cards) ---
+                        Surface(
+                            color = if (settings.isNightMode) DarkSurface else Color(0xFFF3F4F6),
+                            border = BorderStroke(0.5.dp, BorderDark),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 8.dp, vertical = 4.dp),
+                                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                            ) {
+                                // 1. Split-Column Mushaf Page (Image 2 style)
+                                Surface(
+                                    shape = RoundedCornerShape(8.dp),
+                                    color = if (settings.viewMode == QuranViewMode.MUSHAF_SPLIT_PAGE) Emerald700 else Color.Transparent,
+                                    border = BorderStroke(
+                                        1.dp,
+                                        if (settings.viewMode == QuranViewMode.MUSHAF_SPLIT_PAGE) Gold400 else BorderDark
+                                    ),
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .clickable {
+                                            quranRepo.updateSettings(settings.copy(viewMode = QuranViewMode.MUSHAF_SPLIT_PAGE))
+                                        }
+                                ) {
+                                    Box(
+                                        contentAlignment = Alignment.Center,
+                                        modifier = Modifier.padding(vertical = 6.dp)
+                                    ) {
+                                        Text(
+                                            text = "📖 دو کالم مصحف",
+                                            fontFamily = NastaliqUrduFontFamily,
+                                            fontSize = 11.5.sp,
+                                            fontWeight = if (settings.viewMode == QuranViewMode.MUSHAF_SPLIT_PAGE) FontWeight.Bold else FontWeight.Normal,
+                                            color = if (settings.viewMode == QuranViewMode.MUSHAF_SPLIT_PAGE) Color.White else textColor
+                                        )
+                                    }
+                                }
+
+                                // 2. Word-by-Word Grid (Image 1 style)
+                                Surface(
+                                    shape = RoundedCornerShape(8.dp),
+                                    color = if (settings.viewMode == QuranViewMode.WORD_BY_WORD) Emerald700 else Color.Transparent,
+                                    border = BorderStroke(
+                                        1.dp,
+                                        if (settings.viewMode == QuranViewMode.WORD_BY_WORD) Gold400 else BorderDark
+                                    ),
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .clickable {
+                                            quranRepo.updateSettings(settings.copy(viewMode = QuranViewMode.WORD_BY_WORD))
+                                        }
+                                ) {
+                                    Box(
+                                        contentAlignment = Alignment.Center,
+                                        modifier = Modifier.padding(vertical = 6.dp)
+                                    ) {
+                                        Text(
+                                            text = "🔤 لفظی ترجمہ",
+                                            fontFamily = NastaliqUrduFontFamily,
+                                            fontSize = 11.5.sp,
+                                            fontWeight = if (settings.viewMode == QuranViewMode.WORD_BY_WORD) FontWeight.Bold else FontWeight.Normal,
+                                            color = if (settings.viewMode == QuranViewMode.WORD_BY_WORD) Color.White else textColor
+                                        )
+                                    }
+                                }
+
+                                // 3. Verse by Verse Cards
+                                Surface(
+                                    shape = RoundedCornerShape(8.dp),
+                                    color = if (settings.viewMode == QuranViewMode.VERSE_BY_VERSE) Emerald700 else Color.Transparent,
+                                    border = BorderStroke(
+                                        1.dp,
+                                        if (settings.viewMode == QuranViewMode.VERSE_BY_VERSE) Gold400 else BorderDark
+                                    ),
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .clickable {
+                                            quranRepo.updateSettings(settings.copy(viewMode = QuranViewMode.VERSE_BY_VERSE))
+                                        }
+                                ) {
+                                    Box(
+                                        contentAlignment = Alignment.Center,
+                                        modifier = Modifier.padding(vertical = 6.dp)
+                                    ) {
+                                        Text(
+                                            text = "📋 آیت کارڈز",
+                                            fontFamily = NastaliqUrduFontFamily,
+                                            fontSize = 11.5.sp,
+                                            fontWeight = if (settings.viewMode == QuranViewMode.VERSE_BY_VERSE) FontWeight.Bold else FontWeight.Normal,
+                                            color = if (settings.viewMode == QuranViewMode.VERSE_BY_VERSE) Color.White else textColor
+                                        )
+                                    }
+                                }
+                            }
+                        }
+
                         if (isLoading && currentAyahs.isEmpty()) {
                             Box(
                                 modifier = Modifier
@@ -409,46 +510,107 @@ fun QuranReaderScreen(
                                 }
                             }
                         } else {
-                            LazyColumn(
-                                state = listState,
-                                modifier = Modifier.fillMaxSize(),
-                                contentPadding = PaddingValues(bottom = 32.dp)
-                            ) {
-                                // Bismillah Header (Shown at start of Surahs except Surah At-Tawbah #9)
-                                if (!readingByParaMode && activeSurahNumber != 9) {
-                                    item {
-                                        BismillahHeaderCard(
-                                            isNightMode = settings.isNightMode,
-                                            useParchmentMode = settings.useParchmentMode
-                                        )
-                                    }
-                                }
+                            val activeSurahObj = quranRepo.allSurahs.find { it.number == activeSurahNumber }
+                            val activeParaObj = quranRepo.allParas.find { it.number == activeParaNumber }
+                            val curSurahAr = activeSurahObj?.nameArabic ?: currentAyahs.firstOrNull()?.surahNameArabic ?: "القرآن"
+                            val curParaAr = activeParaObj?.nameArabic ?: "الم"
 
-                                itemsIndexed(currentAyahs, key = { _, item -> "${item.surahNumber}_${item.numberInSurah}" }) { index, ayah ->
-                                    AyahReadingCard(
-                                        ayah = ayah,
-                                        index = index + 1,
-                                        totalAyahs = currentAyahs.size,
+                            when (settings.viewMode) {
+                                QuranViewMode.MUSHAF_SPLIT_PAGE -> {
+                                    MushafSplitPageView(
+                                        ayahs = currentAyahs,
+                                        surahNumber = activeSurahNumber,
+                                        surahNameArabic = curSurahAr,
+                                        paraNumber = activeParaNumber,
+                                        paraNameArabic = curParaAr,
                                         settings = settings,
-                                        textColor = textColor,
-                                        subTextColor = subTextColor,
-                                        cardColor = cardColor,
-                                        onBookmarkClick = { quranRepo.toggleBookmark(ayah) },
-                                        onCopyClick = {
-                                            val textToCopy = """
+                                        listState = listState,
+                                        onBookmarkClick = { quranRepo.toggleBookmark(it) },
+                                        onCopyClick = { ayah ->
+                                            val textToCopy = "${ayah.textArabic}\n\nترجمہ کنز الایمان:\n${ayah.translationKanzuliman}\n\n[سورة $curSurahAr، آية ${ayah.numberInSurah}]"
+                                            val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                                            clipboard.setPrimaryClip(ClipData.newPlainText("Quran Ayah", textToCopy))
+                                            Toast.makeText(context, "آیت اور ترجمہ کاپی ہو گیا", Toast.LENGTH_SHORT).show()
+                                        },
+                                        onShareClick = { ayah ->
+                                            val shareText = "${ayah.textArabic}\n\nترجمہ کنز الایمان:\n${ayah.translationKanzuliman}\n\n(سورة $curSurahAr • آیت ${ayah.numberInSurah})\n- النور اسلامی ایپ"
+                                            val sendIntent = Intent().apply {
+                                                action = Intent.ACTION_SEND
+                                                putExtra(Intent.EXTRA_TEXT, shareText)
+                                                type = "text/plain"
+                                            }
+                                            context.startActivity(Intent.createChooser(sendIntent, "Share Holy Ayah"))
+                                        }
+                                    )
+                                }
+                                QuranViewMode.WORD_BY_WORD -> {
+                                    WordByWordPageView(
+                                        ayahs = currentAyahs,
+                                        surahNumber = activeSurahNumber,
+                                        surahNameArabic = curSurahAr,
+                                        paraNumber = activeParaNumber,
+                                        paraNameArabic = curParaAr,
+                                        settings = settings,
+                                        listState = listState,
+                                        onBookmarkClick = { quranRepo.toggleBookmark(it) },
+                                        onCopyClick = { ayah ->
+                                            val textToCopy = "${ayah.textArabic}\n\nترجمہ کنز الایمان:\n${ayah.translationKanzuliman}\n\n[سورة $curSurahAr، آية ${ayah.numberInSurah}]"
+                                            val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                                            clipboard.setPrimaryClip(ClipData.newPlainText("Quran Ayah", textToCopy))
+                                            Toast.makeText(context, "آیت اور لفظی ترجمہ کاپی ہو گیا", Toast.LENGTH_SHORT).show()
+                                        },
+                                        onShareClick = { ayah ->
+                                            val shareText = "${ayah.textArabic}\n\nترجمہ کنز الایمان:\n${ayah.translationKanzuliman}\n\n(سورة $curSurahAr • آیت ${ayah.numberInSurah})\n- النور اسلامی ایپ"
+                                            val sendIntent = Intent().apply {
+                                                action = Intent.ACTION_SEND
+                                                putExtra(Intent.EXTRA_TEXT, shareText)
+                                                type = "text/plain"
+                                            }
+                                            context.startActivity(Intent.createChooser(sendIntent, "Share Holy Ayah"))
+                                        }
+                                    )
+                                }
+                                QuranViewMode.VERSE_BY_VERSE -> {
+                                    LazyColumn(
+                                        state = listState,
+                                        modifier = Modifier.fillMaxSize(),
+                                        contentPadding = PaddingValues(bottom = 32.dp)
+                                    ) {
+                                        // Bismillah Header (Shown at start of Surahs except Surah At-Tawbah #9)
+                                        if (!readingByParaMode && activeSurahNumber != 9) {
+                                            item {
+                                                BismillahHeaderCard(
+                                                    isNightMode = settings.isNightMode,
+                                                    useParchmentMode = settings.useParchmentMode
+                                                )
+                                            }
+                                        }
+
+                                        itemsIndexed(currentAyahs, key = { _, item -> "${item.surahNumber}_${item.numberInSurah}" }) { index, ayah ->
+                                            AyahReadingCard(
+                                                ayah = ayah,
+                                                index = index + 1,
+                                                totalAyahs = currentAyahs.size,
+                                                settings = settings,
+                                                textColor = textColor,
+                                                subTextColor = subTextColor,
+                                                cardColor = cardColor,
+                                                onBookmarkClick = { quranRepo.toggleBookmark(ayah) },
+                                                onCopyClick = {
+                                                    val textToCopy = """
 ${ayah.textArabic}
 
 ترجمہ کنز الایمان (امام احمد رضا خان):
 ${ayah.translationKanzuliman}
 
 [القرآن - سورة ${ayah.surahNameArabic ?: ""}، آية ${ayah.numberInSurah} • پاره ${ayah.paraNumber}]
-                                            """.trimIndent()
-                                            val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-                                            clipboard.setPrimaryClip(ClipData.newPlainText("Quran Ayah", textToCopy))
-                                            Toast.makeText(context, "آیت اور ترجمہ کاپی ہو گیا", Toast.LENGTH_SHORT).show()
-                                        },
-                                        onShareClick = {
-                                            val shareText = """
+                                                    """.trimIndent()
+                                                    val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                                                    clipboard.setPrimaryClip(ClipData.newPlainText("Quran Ayah", textToCopy))
+                                                    Toast.makeText(context, "آیت اور ترجمہ کاپی ہو گیا", Toast.LENGTH_SHORT).show()
+                                                },
+                                                onShareClick = {
+                                                    val shareText = """
 ${ayah.textArabic}
 
 ترجمہ کنز الایمان:
@@ -456,26 +618,28 @@ ${ayah.translationKanzuliman}
 
 (سورة ${ayah.surahNameArabic.ifEmpty { "القرآن" }} • آیت ${ayah.numberInSurah})
 - النور اسلامی ایپ
-                                            """.trimIndent()
-                                            val sendIntent = Intent().apply {
-                                                action = Intent.ACTION_SEND
-                                                putExtra(Intent.EXTRA_TEXT, shareText)
-                                                type = "text/plain"
-                                            }
-                                            val shareIntent = Intent.createChooser(sendIntent, "Share Holy Ayah")
-                                            context.startActivity(shareIntent)
-                                        },
-                                        onMarkAsReadClick = {
-                                            quranRepo.updateReadingProgress(
-                                                para = ayah.paraNumber,
-                                                surahNumber = ayah.surahNumber,
-                                                surahName = ayah.surahNameEnglish.ifEmpty { "Surah $activeSurahNumber" },
-                                                surahNameArabic = ayah.surahNameArabic.ifEmpty { "القرآن" },
-                                                ayahNumber = ayah.numberInSurah
+                                                    """.trimIndent()
+                                                    val sendIntent = Intent().apply {
+                                                        action = Intent.ACTION_SEND
+                                                        putExtra(Intent.EXTRA_TEXT, shareText)
+                                                        type = "text/plain"
+                                                    }
+                                                    val shareIntent = Intent.createChooser(sendIntent, "Share Holy Ayah")
+                                                    context.startActivity(shareIntent)
+                                                },
+                                                onMarkAsReadClick = {
+                                                    quranRepo.updateReadingProgress(
+                                                        para = ayah.paraNumber,
+                                                        surahNumber = ayah.surahNumber,
+                                                        surahName = ayah.surahNameEnglish.ifEmpty { "Surah $activeSurahNumber" },
+                                                        surahNameArabic = ayah.surahNameArabic.ifEmpty { "القرآن" },
+                                                        ayahNumber = ayah.numberInSurah
+                                                    )
+                                                    Toast.makeText(context, "تلاوت کی جگہ محفوظ ہو گئی (Bookmark Saved)", Toast.LENGTH_SHORT).show()
+                                                }
                                             )
-                                            Toast.makeText(context, "تلاوت کی جگہ محفوظ ہو گئی (Bookmark Saved)", Toast.LENGTH_SHORT).show()
                                         }
-                                    )
+                                    }
                                 }
                             }
                         }
@@ -773,14 +937,81 @@ ${ayah.translationKanzuliman}
                         color = Gold400
                     )
                     Text(
-                        text = "Customize Arabic font size, Urdu translation, and contrast",
+                        text = "Customize reading style, Arabic calligraphy, Tajweed, and contrast",
                         fontSize = 12.sp,
                         color = subTextColor
                     )
 
                     Spacer(modifier = Modifier.height(16.dp))
 
-                    // 1. Arabic Font Size Slider
+                    // 1. Reading View Mode Selector
+                    Text("قرآنی اندازِ تلاوت (Reading View Mode)", fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = textColor)
+                    Spacer(modifier = Modifier.height(6.dp))
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Surface(
+                            shape = RoundedCornerShape(8.dp),
+                            color = if (settings.viewMode == QuranViewMode.MUSHAF_SPLIT_PAGE) Emerald700 else Color.Transparent,
+                            border = BorderStroke(1.dp, if (settings.viewMode == QuranViewMode.MUSHAF_SPLIT_PAGE) Gold400 else BorderDark),
+                            modifier = Modifier
+                                .weight(1f)
+                                .clickable { quranRepo.updateSettings(settings.copy(viewMode = QuranViewMode.MUSHAF_SPLIT_PAGE)) }
+                        ) {
+                            Box(contentAlignment = Alignment.Center, modifier = Modifier.padding(vertical = 8.dp)) {
+                                Text(
+                                    text = "📖 دو کالم مصحف",
+                                    fontFamily = NastaliqUrduFontFamily,
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = if (settings.viewMode == QuranViewMode.MUSHAF_SPLIT_PAGE) Color.White else textColor
+                                )
+                            }
+                        }
+
+                        Surface(
+                            shape = RoundedCornerShape(8.dp),
+                            color = if (settings.viewMode == QuranViewMode.WORD_BY_WORD) Emerald700 else Color.Transparent,
+                            border = BorderStroke(1.dp, if (settings.viewMode == QuranViewMode.WORD_BY_WORD) Gold400 else BorderDark),
+                            modifier = Modifier
+                                .weight(1f)
+                                .clickable { quranRepo.updateSettings(settings.copy(viewMode = QuranViewMode.WORD_BY_WORD)) }
+                        ) {
+                            Box(contentAlignment = Alignment.Center, modifier = Modifier.padding(vertical = 8.dp)) {
+                                Text(
+                                    text = "🔤 لفظی ترجمہ",
+                                    fontFamily = NastaliqUrduFontFamily,
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = if (settings.viewMode == QuranViewMode.WORD_BY_WORD) Color.White else textColor
+                                )
+                            }
+                        }
+
+                        Surface(
+                            shape = RoundedCornerShape(8.dp),
+                            color = if (settings.viewMode == QuranViewMode.VERSE_BY_VERSE) Emerald700 else Color.Transparent,
+                            border = BorderStroke(1.dp, if (settings.viewMode == QuranViewMode.VERSE_BY_VERSE) Gold400 else BorderDark),
+                            modifier = Modifier
+                                .weight(1f)
+                                .clickable { quranRepo.updateSettings(settings.copy(viewMode = QuranViewMode.VERSE_BY_VERSE)) }
+                        ) {
+                            Box(contentAlignment = Alignment.Center, modifier = Modifier.padding(vertical = 8.dp)) {
+                                Text(
+                                    text = "📋 آیت کارڈز",
+                                    fontFamily = NastaliqUrduFontFamily,
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = if (settings.viewMode == QuranViewMode.VERSE_BY_VERSE) Color.White else textColor
+                                )
+                            }
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(16.dp))
+
+                    // 2. Arabic Font Size Slider
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween
@@ -804,6 +1035,7 @@ ${ayah.translationKanzuliman}
                     ) {
                         Text(
                             text = "بِسْمِ اللَّهِ الرَّحْمَٰنِ الرَّحِيمِ",
+                            fontFamily = AmiriQuranFontFamily,
                             fontSize = settings.arabicFontSize.sp,
                             color = textColor,
                             textAlign = TextAlign.Center,
@@ -813,7 +1045,7 @@ ${ayah.translationKanzuliman}
 
                     Spacer(modifier = Modifier.height(16.dp))
 
-                    // 2. Urdu Font Size Slider
+                    // 3. Urdu Font Size Slider
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween
@@ -831,7 +1063,26 @@ ${ayah.translationKanzuliman}
 
                     Spacer(modifier = Modifier.height(12.dp))
 
-                    // 3. Toggle Urdu Translation on/off
+                    // 4. Toggle Tajweed Colors
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Column {
+                            Text("تجوید کلر کوڈنگ (Tajweed Colors)", fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = textColor)
+                            Text("لفظِ اللہ سرخ اور احکامِ مد و وقف رنگین دکھائیں", fontSize = 11.sp, color = subTextColor)
+                        }
+                        Switch(
+                            checked = settings.enableTajweedColors,
+                            onCheckedChange = { quranRepo.updateSettings(settings.copy(enableTajweedColors = it)) },
+                            colors = SwitchDefaults.colors(checkedThumbColor = Gold400, checkedTrackColor = Emerald700)
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.height(12.dp))
+
+                    // 5. Toggle Urdu Translation on/off
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         verticalAlignment = Alignment.CenterVertically,
@@ -850,7 +1101,7 @@ ${ayah.translationKanzuliman}
 
                     Spacer(modifier = Modifier.height(12.dp))
 
-                    // 4. Parchment Mode
+                    // 6. Parchment Mode
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         verticalAlignment = Alignment.CenterVertically,
@@ -1305,7 +1556,8 @@ private fun BismillahHeaderCard(
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                 Text(
                     text = "بِسْمِ اللَّهِ الرَّحْمَٰنِ الرَّحِيمِ",
-                    fontSize = 22.sp,
+                    fontFamily = AmiriQuranFontFamily,
+                    fontSize = 24.sp,
                     fontWeight = FontWeight.Bold,
                     color = Gold400,
                     textAlign = TextAlign.Center
@@ -1313,7 +1565,8 @@ private fun BismillahHeaderCard(
                 Spacer(modifier = Modifier.height(4.dp))
                 Text(
                     text = "اللہ کے نام سے شروع جو بہت مہربان رحمت والا",
-                    fontSize = 12.sp,
+                    fontFamily = NastaliqUrduFontFamily,
+                    fontSize = 13.sp,
                     color = Emerald100,
                     textAlign = TextAlign.Center
                 )
@@ -1456,18 +1709,23 @@ private fun AyahReadingCard(
 
             Spacer(modifier = Modifier.height(12.dp))
 
-            // ARABIC AYAH TEXT
-            Text(
+            // ARABIC AYAH TEXT WITH AMIRI QURANIC SCRIPT & TAJWEED HIGHLIGHTING
+            val annotatedArabic = buildTajweedAnnotatedString(
                 text = ayah.textArabic,
+                enableTajweed = settings.enableTajweedColors,
+                defaultColor = textColor
+            )
+            Text(
+                text = annotatedArabic,
+                fontFamily = AmiriQuranFontFamily,
                 fontSize = settings.arabicFontSize.sp,
-                lineHeight = (settings.arabicFontSize * 1.6f).sp,
-                fontWeight = FontWeight.Medium,
-                color = textColor,
+                lineHeight = (settings.arabicFontSize * 1.75f).sp,
+                fontWeight = FontWeight.Normal,
                 textAlign = TextAlign.End,
                 modifier = Modifier.fillMaxWidth()
             )
 
-            // KANZ-UL-IMAN URDU TRANSLATION
+            // KANZ-UL-IMAN URDU TRANSLATION WITH NASTALIQ SCRIPT
             if (settings.showUrduTranslation && ayah.translationKanzuliman.isNotBlank()) {
                 Spacer(modifier = Modifier.height(10.dp))
                 HorizontalDivider(color = Gold400.copy(alpha = 0.25f), thickness = 1.dp)
@@ -1481,17 +1739,19 @@ private fun AyahReadingCard(
                     ) {
                         Text(
                             text = "کنز الایمان",
-                            fontSize = 9.sp,
+                            fontFamily = NastaliqUrduFontFamily,
+                            fontSize = 10.sp,
                             fontWeight = FontWeight.Bold,
                             color = Gold300,
-                            modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp)
+                            modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp)
                         )
                     }
                     Spacer(modifier = Modifier.width(8.dp))
                     Text(
                         text = ayah.translationKanzuliman,
+                        fontFamily = NastaliqUrduFontFamily,
                         fontSize = settings.urduFontSize.sp,
-                        lineHeight = (settings.urduFontSize * 1.55f).sp,
+                        lineHeight = (settings.urduFontSize * 1.65f).sp,
                         color = textColor.copy(alpha = 0.9f),
                         textAlign = TextAlign.Start,
                         modifier = Modifier.weight(1f)
