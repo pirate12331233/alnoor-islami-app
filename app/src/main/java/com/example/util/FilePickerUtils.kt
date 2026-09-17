@@ -49,7 +49,7 @@ data class PickedFileInfo(
 object FilePickerUtils {
 
     private const val TAG = "FilePickerUtils"
-    private const val FILE_PROVIDER_AUTHORITY = "com.aistudio.alnoorislamic.app.fileprovider"
+    private fun getFileProviderAuthority(context: Context): String = "${context.packageName}.fileprovider"
 
     private val httpClient: OkHttpClient by lazy {
         OkHttpClient.Builder()
@@ -222,7 +222,7 @@ object FilePickerUtils {
 
                 val contentUri = FileProvider.getUriForFile(
                     context,
-                    FILE_PROVIDER_AUTHORITY,
+                    getFileProviderAuthority(context),
                     file
                 )
 
@@ -301,7 +301,7 @@ object FilePickerUtils {
                     prepareGenericDocument(context, fileUrl, title, description, contentPreview)
                 }
 
-                val contentUri = FileProvider.getUriForFile(context, FILE_PROVIDER_AUTHORITY, file)
+                val contentUri = FileProvider.getUriForFile(context, getFileProviderAuthority(context), file)
                 val mime = if (isPdf) "application/pdf" else if (isImage) "image/*" else "*/*"
 
                 val shareIntent = Intent(Intent.ACTION_SEND).apply {
