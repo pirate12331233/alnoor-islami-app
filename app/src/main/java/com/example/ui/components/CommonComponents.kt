@@ -49,6 +49,7 @@ import androidx.compose.material.icons.filled.Radio
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Security
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.Sync
 import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material.icons.filled.VolumeUp
 import androidx.compose.material.icons.outlined.PhotoLibrary
@@ -154,6 +155,7 @@ fun AlnoorTopBar(
     onAuthClick: () -> Unit = {},
     onAdminUsersClick: (() -> Unit)? = null,
     onSignOutClick: (() -> Unit)? = null,
+    isSyncing: Boolean = false,
     modifier: Modifier = Modifier
 ) {
     val topBarBg = MaterialTheme.colorScheme.primaryContainer
@@ -176,73 +178,90 @@ fun AlnoorTopBar(
                 if (selectedTab != AppTab.HOME && onBackToHome != null) {
                     // Back to Dashboard / Subscreen Top Bar
                     Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier.weight(1f, fill = false)
-                    ) {
-                        IconButton(
-                            onClick = onBackToHome,
-                            modifier = Modifier
-                                .size(38.dp)
-                                .testTag("topbar_back_to_dashboard_button")
-                        ) {
-                            Icon(
-                                imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                                contentDescription = "Back to Dashboard",
-                                tint = accentColor,
-                                modifier = Modifier.size(24.dp)
-                            )
-                        }
-
-                        Spacer(modifier = Modifier.width(4.dp))
-
-                        Column {
-                            Text(
-                                text = selectedTab.title,
-                                style = MaterialTheme.typography.titleMedium,
-                                fontWeight = FontWeight.Bold,
-                                color = contentColor,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis
-                            )
-                            Text(
-                                text = "Alnoor Islamic Portal",
-                                style = MaterialTheme.typography.labelSmall,
-                                color = accentColor
-                            )
-                        }
-                    }
-                } else {
-                    // Main Dashboard Top Bar (Logo & App Name)
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.weight(1f, fill = false)
+                ) {
+                    IconButton(
+                        onClick = onBackToHome,
                         modifier = Modifier
-                            .weight(1f, fill = false)
-                            .clickable { onOpenLiveChannel() }
+                            .size(38.dp)
+                            .testTag("topbar_back_to_dashboard_button")
                     ) {
-                        Box(
-                            modifier = Modifier
-                                .size(38.dp)
-                                .background(contentColor.copy(alpha = 0.12f), RoundedCornerShape(10.dp))
-                                .padding(2.dp),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Image(
-                                painter = painterResource(id = R.drawable.app_logo),
-                                contentDescription = "Alnoor Islami Logo",
-                                modifier = Modifier.fillMaxSize(),
-                                contentScale = ContentScale.Fit
-                            )
-                        }
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Column(modifier = Modifier.weight(1f, fill = false)) {
-                            Text(
-                                text = "Alnoor Islami",
-                                style = MaterialTheme.typography.titleMedium,
-                                fontWeight = FontWeight.Bold,
-                                color = contentColor,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis
-                            )
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                            contentDescription = "Back to Dashboard",
+                            tint = accentColor,
+                            modifier = Modifier.size(24.dp)
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.width(4.dp))
+
+                    Column {
+                        Text(
+                            text = selectedTab.title,
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = contentColor,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                        Text(
+                            text = "Alnoor Islamic Portal",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = accentColor
+                        )
+                    }
+                }
+            } else {
+                // Main Dashboard Top Bar (Logo & App Name)
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier
+                        .weight(1f, fill = false)
+                        .clickable { onOpenLiveChannel() }
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(38.dp)
+                            .background(contentColor.copy(alpha = 0.12f), RoundedCornerShape(10.dp))
+                            .padding(2.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Image(
+                            painter = painterResource(id = R.drawable.app_logo),
+                            contentDescription = "Alnoor Islami Logo",
+                            modifier = Modifier.fillMaxSize(),
+                            contentScale = ContentScale.Fit
+                        )
+                    }
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Column(modifier = Modifier.weight(1f, fill = false)) {
+                        Text(
+                            text = "Alnoor Islami",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = contentColor,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                        if (isSyncing) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(
+                                    imageVector = Icons.Default.Sync,
+                                    contentDescription = "Syncing with cloud",
+                                    tint = accentColor,
+                                    modifier = Modifier.size(11.dp)
+                                )
+                                Spacer(modifier = Modifier.width(3.dp))
+                                Text(
+                                    text = "Syncing updates...",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = accentColor,
+                                    maxLines = 1
+                                )
+                            }
+                        } else {
                             Text(
                                 text = "@AlnoorislamiMushahidat",
                                 style = MaterialTheme.typography.labelSmall,
@@ -253,6 +272,7 @@ fun AlnoorTopBar(
                         }
                     }
                 }
+            }
 
                 // Top Right Action Section: Role Mode with Notifications Bell & Exit Button below it
                 Column(

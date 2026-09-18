@@ -3,6 +3,7 @@ package com.example.data.remote
 import android.content.Context
 import android.util.Log
 import com.example.util.NotificationHelper
+import com.example.util.AlnoorBackgroundSyncReceiver
 import com.example.data.local.AppDatabase
 import com.example.data.local.CommunityEventEntity
 import com.example.data.local.DaroodSubmissionEntity
@@ -123,7 +124,8 @@ class FirestoreSyncManager private constructor() {
         title: String,
         body: String,
         targetTab: String? = null,
-        scope: CoroutineScope
+        scope: CoroutineScope,
+        context: Context? = null
     ) {
         scope.launch(Dispatchers.IO) {
             try {
@@ -137,6 +139,10 @@ class FirestoreSyncManager private constructor() {
                 }
                 saveDocument("broadcast_notifications", notifId, fields)
                 touchManifest("broadcast", scope)
+                // Deduplication: mark this alert ID as already shown on this device to prevent echo
+                context?.let { ctx ->
+                    AlnoorBackgroundSyncReceiver.markAlertShown(ctx, notifId)
+                }
                 Log.d(TAG, "Synced broadcast notification to Firestore: $title")
             } catch (e: Exception) {
                 Log.e(TAG, "Error pushing broadcast notification: ${e.message}", e)
@@ -151,32 +157,54 @@ class FirestoreSyncManager private constructor() {
             val prefs = context.getSharedPreferences("alnoor_sync_prefs", Context.MODE_PRIVATE)
             val db = AppDatabase.getDatabase(context)
 
-            // 1. Check Broadcast Alerts
+            // 1. Check Broadcast Alerts with ID tracking & Deduplication
             val broadcastV = getLongValue(fields, "broadcast_v", 0L)
             val lastBroadcastV = prefs.getLong("bg_broadcast_v", 0L)
             if (broadcastV > lastBroadcastV) {
                 val remoteAlerts = fetchCollection("broadcast_notifications")
                 if (remoteAlerts.isNotEmpty()) {
-                    val latest = remoteAlerts.maxByOrNull {
-                        getLongValue(it.optJSONObject("fields") ?: JSONObject(), "timestamp", 0L)
-                    }
-                    if (latest != null) {
-                        val alertFields = latest.optJSONObject("fields") ?: JSONObject()
-                        val title = getStringValue(alertFields, "title", "Alnoor Community Alert")
-                        val body = getStringValue(alertFields, "body", "")
-                        val targetTab = getStringValue(alertFields, "targetTab", "")
-                        NotificationHelper.showHeadsUpNotification(
-                            context = context,
-                            title = title,
-                            body = body,
-                            targetTab = if (targetTab.isNotBlank()) targetTab else null
-                        )
+                    if (lastBroadcastV == 0L) {
+                        // First run on this device: mark existing alerts as already shown so past notifications are not re-alerted
+                        val allIds = remoteAlerts.mapNotNull {
+                            val alertFields = it.optJSONObject("fields") ?: JSONObject()
+                            getStringValue(alertFields, "id", "").takeIf { id -> id.isNotBlank() }
+                        }
+                        AlnoorBackgroundSyncReceiver.markAlertsShown(context, allIds)
+                    } else {
+                        val unseenAlerts = remoteAlerts.filter {
+                            val alertFields = it.optJSONObject("fields") ?: JSONObject()
+                            val id = getStringValue(alertFields, "id", "")
+                            id.isNotBlank() && !AlnoorBackgroundSyncReceiver.isAlertShown(context, id)
+                        }
+                        val latest = unseenAlerts.maxByOrNull {
+                            getLongValue(it.optJSONObject("fields") ?: JSONObject(), "timestamp", 0L)
+                        }
+                        if (latest != null) {
+                            val alertFields = latest.optJSONObject("fields") ?: JSONObject()
+                            val alertId = getStringValue(alertFields, "id", "")
+                            val title = getStringValue(alertFields, "title", "Alnoor Community Alert")
+                            val body = getStringValue(alertFields, "body", "")
+                            val targetTab = getStringValue(alertFields, "targetTab", "")
+                            NotificationHelper.showHeadsUpNotification(
+                                context = context,
+                                title = title,
+                                body = body,
+                                targetTab = if (targetTab.isNotBlank()) targetTab else null
+                            )
+                            if (alertId.isNotBlank()) {
+                                AlnoorBackgroundSyncReceiver.markAlertShown(context, alertId)
+                            }
+                            unseenAlerts.forEach { unseen ->
+                                val uId = getStringValue(unseen.optJSONObject("fields") ?: JSONObject(), "id", "")
+                                if (uId.isNotBlank()) AlnoorBackgroundSyncReceiver.markAlertShown(context, uId)
+                            }
+                        }
                     }
                 }
                 prefs.edit().putLong("bg_broadcast_v", maxOf(broadcastV, System.currentTimeMillis())).apply()
             }
 
-            // 2. Check Events
+            // 2. Check Events with Deduplication
             val eventsV = getLongValue(fields, "events_v", 0L)
             val lastEventsV = prefs.getLong("bg_events_v", 0L)
             if (eventsV > lastEventsV) {
@@ -184,39 +212,52 @@ class FirestoreSyncManager private constructor() {
                 if (remoteEvents.isNotEmpty()) {
                     val eventEntities = remoteEvents.mapNotNull { parseEventEntity(it) }
                     if (eventEntities.isNotEmpty()) {
-                        val localEvents: List<CommunityEventEntity> = try { db.eventsDao().getExistingEventsList() } catch (_: Exception) { emptyList() }
-                        val localMap = localEvents.associateBy { it.id }
-                        val newlyAdded = if (localMap.isNotEmpty()) eventEntities.filter { !localMap.containsKey(it.id) } else emptyList()
-                        val updated = if (localMap.isNotEmpty()) eventEntities.filter { r: CommunityEventEntity ->
-                            val l = localMap[r.id]
-                            l != null && (l.title != r.title || l.dateGregorian != r.dateGregorian || l.time != r.time || l.venue != r.venue || l.description != r.description)
-                        } else emptyList()
+                        if (lastEventsV == 0L) {
+                            // First run on this device: populate local Room database silently
+                            db.eventsDao().syncEventsWithCloud(eventEntities)
+                        } else {
+                            val localEvents: List<CommunityEventEntity> = try { db.eventsDao().getExistingEventsList() } catch (_: Exception) { emptyList() }
+                            val localMap = localEvents.associateBy { it.id }
+                            val newlyAdded = if (localMap.isNotEmpty()) eventEntities.filter { !localMap.containsKey(it.id) } else emptyList()
+                            val updated = if (localMap.isNotEmpty()) eventEntities.filter { r: CommunityEventEntity ->
+                                val l = localMap[r.id]
+                                l != null && (l.title != r.title || l.dateGregorian != r.dateGregorian || l.time != r.time || l.venue != r.venue || l.description != r.description)
+                            } else emptyList()
 
-                        db.eventsDao().syncEventsWithCloud(eventEntities)
+                            db.eventsDao().syncEventsWithCloud(eventEntities)
 
-                        if (newlyAdded.isNotEmpty()) {
-                            val ev = newlyAdded.last()
-                            NotificationHelper.showHeadsUpNotification(
-                                context = context,
-                                title = "Upcoming New Mahafil",
-                                body = "${ev.title} on ${ev.dateGregorian}",
-                                targetTab = "EVENTS"
-                            )
-                        } else if (updated.isNotEmpty()) {
-                            val ev = updated.last()
-                            NotificationHelper.showHeadsUpNotification(
-                                context = context,
-                                title = "Upcoming Mahafil Updated",
-                                body = "${ev.title} details updated by Admin.",
-                                targetTab = "EVENTS"
-                            )
+                            if (newlyAdded.isNotEmpty()) {
+                                val ev = newlyAdded.last()
+                                val alertKey = "event_add_${ev.id}_${ev.title}"
+                                if (!AlnoorBackgroundSyncReceiver.isAlertShown(context, alertKey)) {
+                                    NotificationHelper.showHeadsUpNotification(
+                                        context = context,
+                                        title = "Upcoming New Mahafil",
+                                        body = "${ev.title} on ${ev.dateGregorian}",
+                                        targetTab = "EVENTS"
+                                    )
+                                    AlnoorBackgroundSyncReceiver.markAlertShown(context, alertKey)
+                                }
+                            } else if (updated.isNotEmpty()) {
+                                val ev = updated.last()
+                                val alertKey = "event_upd_${ev.id}_${ev.title}_${ev.dateGregorian}"
+                                if (!AlnoorBackgroundSyncReceiver.isAlertShown(context, alertKey)) {
+                                    NotificationHelper.showHeadsUpNotification(
+                                        context = context,
+                                        title = "Upcoming Mahafil Updated",
+                                        body = "${ev.title} details updated by Admin.",
+                                        targetTab = "EVENTS"
+                                    )
+                                    AlnoorBackgroundSyncReceiver.markAlertShown(context, alertKey)
+                                }
+                            }
                         }
                     }
                 }
                 prefs.edit().putLong("bg_events_v", maxOf(eventsV, System.currentTimeMillis())).apply()
             }
 
-            // 3. Check Notices
+            // 3. Check Notices with Deduplication
             val noticesV = getLongValue(fields, "notices_v", 0L)
             val lastNoticesV = prefs.getLong("bg_notices_v", 0L)
             if (noticesV > lastNoticesV) {
@@ -224,33 +265,46 @@ class FirestoreSyncManager private constructor() {
                 if (remoteNotices.isNotEmpty()) {
                     val noticeEntities = remoteNotices.mapNotNull { parseNoticeEntity(it) }
                     if (noticeEntities.isNotEmpty()) {
-                        val localNotices: List<NoticeItemEntity> = try { db.noticesDao().getExistingNoticesList() } catch (_: Exception) { emptyList() }
-                        val localNoticeMap = localNotices.associateBy { it.id }
-                        val newlyAddedNotice = if (localNoticeMap.isNotEmpty()) noticeEntities.filter { !localNoticeMap.containsKey(it.id) } else emptyList()
-                        val updatedNotice = if (localNoticeMap.isNotEmpty()) noticeEntities.filter { r: NoticeItemEntity ->
-                            val l = localNoticeMap[r.id]
-                            l != null && (l.title != r.title || l.content != r.content || l.priority != r.priority)
-                        } else emptyList()
+                        if (lastNoticesV == 0L) {
+                            // First run on this device: populate local Room database silently
+                            db.noticesDao().syncNoticesWithCloud(noticeEntities)
+                        } else {
+                            val localNotices: List<NoticeItemEntity> = try { db.noticesDao().getExistingNoticesList() } catch (_: Exception) { emptyList() }
+                            val localNoticeMap = localNotices.associateBy { it.id }
+                            val newlyAddedNotice = if (localNoticeMap.isNotEmpty()) noticeEntities.filter { !localNoticeMap.containsKey(it.id) } else emptyList()
+                            val updatedNotice = if (localNoticeMap.isNotEmpty()) noticeEntities.filter { r: NoticeItemEntity ->
+                                val l = localNoticeMap[r.id]
+                                l != null && (l.title != r.title || l.content != r.content || l.priority != r.priority)
+                            } else emptyList()
 
-                        db.noticesDao().syncNoticesWithCloud(noticeEntities)
+                            db.noticesDao().syncNoticesWithCloud(noticeEntities)
 
-                        if (newlyAddedNotice.isNotEmpty()) {
-                            val n = newlyAddedNotice.last()
-                            val prefix = if (n.priority.equals("URGENT", ignoreCase = true)) "🚨 URGENT NOTICE" else "📢 Important Notice"
-                            NotificationHelper.showHeadsUpNotification(
-                                context = context,
-                                title = prefix,
-                                body = n.title,
-                                targetTab = "NOTICES"
-                            )
-                        } else if (updatedNotice.isNotEmpty()) {
-                            val n = updatedNotice.last()
-                            NotificationHelper.showHeadsUpNotification(
-                                context = context,
-                                title = "Notice Updated",
-                                body = n.title,
-                                targetTab = "NOTICES"
-                            )
+                            if (newlyAddedNotice.isNotEmpty()) {
+                                val n = newlyAddedNotice.last()
+                                val alertKey = "notice_add_${n.id}_${n.title}"
+                                if (!AlnoorBackgroundSyncReceiver.isAlertShown(context, alertKey)) {
+                                    val prefix = if (n.priority.equals("URGENT", ignoreCase = true)) "🚨 URGENT NOTICE" else "📢 Important Notice"
+                                    NotificationHelper.showHeadsUpNotification(
+                                        context = context,
+                                        title = prefix,
+                                        body = n.title,
+                                        targetTab = "NOTICES"
+                                    )
+                                    AlnoorBackgroundSyncReceiver.markAlertShown(context, alertKey)
+                                }
+                            } else if (updatedNotice.isNotEmpty()) {
+                                val n = updatedNotice.last()
+                                val alertKey = "notice_upd_${n.id}_${n.title}"
+                                if (!AlnoorBackgroundSyncReceiver.isAlertShown(context, alertKey)) {
+                                    NotificationHelper.showHeadsUpNotification(
+                                        context = context,
+                                        title = "Notice Updated",
+                                        body = n.title,
+                                        targetTab = "NOTICES"
+                                    )
+                                    AlnoorBackgroundSyncReceiver.markAlertShown(context, alertKey)
+                                }
+                            }
                         }
                     }
                 }
@@ -322,7 +376,7 @@ class FirestoreSyncManager private constructor() {
 
             onStatusUpdate?.invoke("Fetching Events, Notices & Library...")
             _initialSyncMessage.value = "Fetching Events, Notices & Library..."
-            syncAllCollectionsFromCloud(db, onNotificationReceived)
+            syncAllCollectionsFromCloud(db, null)
 
             onStatusUpdate?.invoke("Finalizing community sync...")
             _initialSyncMessage.value = "Finalizing community sync..."
@@ -365,7 +419,7 @@ class FirestoreSyncManager private constructor() {
         if (manifestDoc == null) {
             // Manifest not reachable or quota exceeded, back off
             if (isInitial) {
-                syncAllCollectionsFromCloud(db, onNotificationReceived)
+                syncAllCollectionsFromCloud(db, null)
             }
             return 15L
         }
@@ -394,14 +448,14 @@ class FirestoreSyncManager private constructor() {
         // 3. Community Events
         val eventsV = getLongValue(fields, "events_v", 0L)
         if (isInitial || eventsV > (lastKnownVersions["events"] ?: 0L)) {
-            syncEventsSection(db, onNotificationReceived)
+            syncEventsSection(db, if (isInitial) null else onNotificationReceived)
             lastKnownVersions["events"] = maxOf(eventsV, System.currentTimeMillis())
         }
 
         // 4. Notices
         val noticesV = getLongValue(fields, "notices_v", 0L)
         if (isInitial || noticesV > (lastKnownVersions["notices"] ?: 0L)) {
-            syncNoticesSection(db, onNotificationReceived)
+            syncNoticesSection(db, if (isInitial) null else onNotificationReceived)
             lastKnownVersions["notices"] = maxOf(noticesV, System.currentTimeMillis())
         }
 

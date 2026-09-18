@@ -201,7 +201,8 @@ class AlnoorRepository private constructor(private val context: Context) {
                 saveActionCardConfigsToPrefs(remoteConfigs)
             },
             onNotificationReceived = { title, body ->
-                triggerFcmPushNotification(title, body)
+                // Incoming sync notifications are local to this device and must not re-broadcast to Firestore cloud
+                triggerFcmPushNotification(title, body, isBroadcast = false)
             },
             onStatusUpdate = onStatusUpdate
         )
@@ -232,7 +233,8 @@ class AlnoorRepository private constructor(private val context: Context) {
                         saveActionCardConfigsToPrefs(merged)
                     },
                     onNotificationReceived = { title, body ->
-                        triggerFcmPushNotification(title, body)
+                        // Incoming sync notifications are local to this device and must not re-broadcast to Firestore cloud
+                        triggerFcmPushNotification(title, body, isBroadcast = false)
                     }
                 )
 
@@ -768,7 +770,7 @@ class AlnoorRepository private constructor(private val context: Context) {
         )
         // Broadcast notification to Firestore cloud so all closed/backgrounded devices receive it (only if isBroadcast is true)
         if (isBroadcast) {
-            firestoreSync.pushBroadcastNotificationToCloud(title, body, targetTab, repositoryScope)
+            firestoreSync.pushBroadcastNotificationToCloud(title, body, targetTab, repositoryScope, context)
         }
     }
 
@@ -2159,11 +2161,11 @@ class AlnoorRepository private constructor(private val context: Context) {
         ),
         NoticeItem(
             id = "not-2",
-            title = "Alnoor Monthly Darood Target Milestone: 1.4 Million Recitations!",
+            title = "Alnoor Monthly Darood Target.",
             content = "Alhamdulillah! The community has collectively completed over 1,400,000 Darood Sharif recitations this month. May Allah accept everyone's sincere devotion.",
             priority = NoticePriority.IMPORTANT,
             date = "Aug 12, 2026",
-            isPinned = true,
+            isPinned = false,
             department = "Spiritual & Darood Committee"
         )
     )

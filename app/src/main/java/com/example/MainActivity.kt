@@ -63,7 +63,6 @@ import com.example.ui.components.AppUpdateMandatoryScreen
 import com.example.ui.components.FcmNotificationBanner
 import com.example.ui.components.FirebaseAuthDialog
 import com.example.ui.components.ImportantNoticeFullScreenDialog
-import com.example.ui.components.InitialSyncLoadingScreen
 import com.example.ui.components.MiniAudioPlayerBar
 import com.example.ui.components.StartupVideoFullScreenPlayer
 import com.example.ui.components.openOfficialYouTubeChannel
@@ -218,8 +217,6 @@ fun AlnoorAppMainScreen(
     var showSignOutConfirmDialog by remember { mutableStateOf(false) }
     var showLoginNoticePopup by remember { mutableStateOf(false) }
     var showStartupVideo by remember { mutableStateOf(true) }
-    var isWaitingForPostLoginSync by remember { mutableStateOf(false) }
-    var dynamicSyncStatus by remember { mutableStateOf("Connecting to Alnoor Cloud...") }
     var adminBypassedUpdate by remember { mutableStateOf(false) }
 
     // --- REQUIREMENT: 10-Second Startup Animation Video Runs First Every Time App Opens ---
@@ -318,9 +315,6 @@ fun AlnoorAppMainScreen(
             repository = repository,
             onLoginSuccess = { role ->
                 repository.setUserRole(role)
-                // Set sync waiting screen active immediately to fetch latest admin material
-                isWaitingForPostLoginSync = true
-                dynamicSyncStatus = "Connecting to Alnoor Cloud..."
 
                 // Automatically set the location of the device, update prayer timings, and save for future use
                 repository.syncDeviceLocationAndPrayerTimes(force = true)
@@ -336,33 +330,21 @@ fun AlnoorAppMainScreen(
                     )
                 }
 
-                // Trigger immediate initial full sync from cloud
+                // Trigger silent initial full sync in background without blocking the UI
                 coroutineScope.launch {
                     try {
-                        repository.performInitialFullSync { statusMsg ->
-                            dynamicSyncStatus = statusMsg
-                        }
+                        repository.performInitialFullSync()
                     } catch (e: Exception) {
-                        android.util.Log.w("MainActivity", "Initial sync error: ${e.message}")
-                    } finally {
-                        isWaitingForPostLoginSync = false
+                        android.util.Log.w("MainActivity", "Silent initial sync error: ${e.message}")
                     }
                 }
 
-                // Automatically land on Home Dashboard with action cards
+                // Instantly land on Home Dashboard with action cards immediately (0 wait time)
                 selectedTab = AppTab.HOME
                 
                 // Show Important Notice on login if configured
                 showLoginNoticePopup = true
             }
-        )
-        return
-    }
-
-    // If currently performing first sync after registration/login, show "Please wait and do not close application" screen
-    if (isWaitingForPostLoginSync) {
-        InitialSyncLoadingScreen(
-            syncStatusText = if (dynamicSyncStatus.isNotBlank()) dynamicSyncStatus else initialSyncMessage
         )
         return
     }
@@ -400,7 +382,8 @@ fun AlnoorAppMainScreen(
                     },
                     onSignOutClick = {
                         showSignOutConfirmDialog = true
-                    }
+                    },
+                    isSyncing = !isInitialSyncComplete
                 )
                 FcmNotificationBanner(
                     message = latestNotification,

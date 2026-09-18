@@ -63,6 +63,29 @@ class AlnoorBackgroundSyncReceiver : BroadcastReceiver() {
 
         // Fast, battery-efficient check interval (60 seconds)
         private const val DEFAULT_INTERVAL_MS = 60_000L
+        private const val PREFS_NAME = "alnoor_sync_prefs"
+        private const val KEY_SHOWN_ALERT_IDS = "shown_alert_ids"
+
+        fun isAlertShown(context: Context, alertId: String): Boolean {
+            val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            val shownSet = prefs.getStringSet(KEY_SHOWN_ALERT_IDS, emptySet()) ?: emptySet()
+            return shownSet.contains(alertId)
+        }
+
+        fun markAlertShown(context: Context, alertId: String) {
+            val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            val shownSet = prefs.getStringSet(KEY_SHOWN_ALERT_IDS, emptySet()) ?: emptySet()
+            val updated = HashSet(shownSet).apply { add(alertId) }
+            prefs.edit().putStringSet(KEY_SHOWN_ALERT_IDS, updated).apply()
+        }
+
+        fun markAlertsShown(context: Context, alertIds: Collection<String>) {
+            if (alertIds.isEmpty()) return
+            val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            val shownSet = prefs.getStringSet(KEY_SHOWN_ALERT_IDS, emptySet()) ?: emptySet()
+            val updated = HashSet(shownSet).apply { addAll(alertIds) }
+            prefs.edit().putStringSet(KEY_SHOWN_ALERT_IDS, updated).apply()
+        }
 
         fun schedule(context: Context, intervalMs: Long = DEFAULT_INTERVAL_MS) {
             try {

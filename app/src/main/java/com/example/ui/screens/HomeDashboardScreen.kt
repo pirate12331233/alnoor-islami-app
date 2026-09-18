@@ -195,7 +195,7 @@ fun HomeDashboardScreen(
                                 )
                             )
                         )
-                        .padding(horizontal = 20.dp, vertical = 18.dp)
+                        .padding(horizontal = 20.dp, vertical = 14.dp)
                 ) {
                     Column(
                         modifier = Modifier.fillMaxWidth(),
@@ -234,47 +234,6 @@ fun HomeDashboardScreen(
                             letterSpacing = 1.sp,
                             textAlign = TextAlign.Center
                         )
-
-                        Spacer(modifier = Modifier.height(8.dp))
-
-                        // Line 3: Asalam o Alikum
-                        Text(
-                            text = "Asalam o Alikum",
-                            color = Gold400,
-                            fontSize = 14.sp,
-                            fontWeight = FontWeight.SemiBold,
-                            textAlign = TextAlign.Center
-                        )
-
-                        // Line 4: User name appears below Asalam o Alikum
-                        val displayName = if (userName.isNotBlank()) userName else "Community Member"
-                        Spacer(modifier = Modifier.height(2.dp))
-                        Text(
-                            text = displayName,
-                            color = Color.White.copy(alpha = 0.95f),
-                            fontSize = 14.sp,
-                            fontWeight = FontWeight.Medium,
-                            textAlign = TextAlign.Center
-                        )
-
-                        // Role Badge
-                        Spacer(modifier = Modifier.height(10.dp))
-                        Surface(
-                            shape = RoundedCornerShape(12.dp),
-                            color = if (currentRole == UserRole.ADMIN) Gold500.copy(alpha = 0.25f) else Emerald700.copy(alpha = 0.6f),
-                            border = androidx.compose.foundation.BorderStroke(
-                                1.dp,
-                                if (currentRole == UserRole.ADMIN) Gold400 else Emerald500
-                            )
-                        ) {
-                            Text(
-                                text = if (currentRole == UserRole.ADMIN) "⭐ Administrator (Muhtamim)" else "✨ Community Member",
-                                color = if (currentRole == UserRole.ADMIN) Gold300 else Emerald100,
-                                fontSize = 11.sp,
-                                fontWeight = FontWeight.Bold,
-                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 3.dp)
-                            )
-                        }
                     }
                 }
             }

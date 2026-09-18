@@ -305,13 +305,20 @@ fun UserWhatsAppChatView(
     val context = LocalContext.current
     val clipboardManager = LocalClipboardManager.current
     val prefs = remember { context.getSharedPreferences("alnoor_user_inquiries_prefs", Context.MODE_PRIVATE) }
+    val authPrefs = remember { context.getSharedPreferences("alnoor_auth_security_prefs", Context.MODE_PRIVATE) }
 
-    // Persistent User Identity on this device
+    // Persistent User Identity automatically pre-pulled from database/session (or saved prefs fallback)
     var savedName by remember {
-        mutableStateOf(prefs.getString("last_sender_name", "") ?: "")
+        val sessionName = authPrefs.getString("saved_user_name", "")?.takeIf { it.isNotBlank() }
+            ?: authPrefs.getString("saved_cred_name", "")?.takeIf { it.isNotBlank() }
+            ?: prefs.getString("last_sender_name", "") ?: ""
+        mutableStateOf(sessionName)
     }
     var savedContact by remember {
-        mutableStateOf(prefs.getString("last_sender_contact", "") ?: "")
+        val sessionContact = authPrefs.getString("saved_user_email", "")?.takeIf { it.isNotBlank() }
+            ?: authPrefs.getString("saved_cred_email", "")?.takeIf { it.isNotBlank() }
+            ?: prefs.getString("last_sender_contact", "") ?: ""
+        mutableStateOf(sessionContact)
     }
     var deviceThreadId by remember {
         val existing = prefs.getString("user_device_thread_id", "") ?: ""
@@ -327,7 +334,6 @@ fun UserWhatsAppChatView(
         mutableStateOf(prefs.getStringSet("sent_inquiry_ids", emptySet())?.toSet() ?: emptySet())
     }
 
-    var showProfileDialog by remember { mutableStateOf(false) }
     var showInfoDialog by remember { mutableStateOf(false) }
     var selectedCategory by remember { mutableStateOf(MessageCategory.GENERAL) }
     var messageInput by remember { mutableStateOf("") }
@@ -442,40 +448,22 @@ fun UserWhatsAppChatView(
 
                 Spacer(modifier = Modifier.height(6.dp))
 
-                // Identity Ribbon (Shows who the user is chatting as)
+                // Identity Ribbon (Pre-pulled User Name and Contact from Database/Session, Read-Only)
                 Surface(
                     shape = RoundedCornerShape(8.dp),
                     color = Emerald800,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clickable { showProfileDialog = true }
+                    modifier = Modifier.fillMaxWidth()
                 ) {
                     Row(
-                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.SpaceBetween
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 7.dp),
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(
-                                Icons.Default.Person,
-                                contentDescription = null,
-                                tint = Gold400,
-                                modifier = Modifier.size(14.dp)
-                            )
-                            Spacer(modifier = Modifier.width(6.dp))
-                            Text(
-                                text = if (savedName.isNotBlank()) "Chatting as: $savedName ${if (savedContact.isNotBlank()) "($savedContact)" else ""}" else "Tap to set your Name & Contact (Optional)",
-                                fontSize = 11.sp,
-                                color = Color.White,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis
-                            )
-                        }
-                        Icon(
-                            Icons.Default.Edit,
-                            contentDescription = "Edit Name",
-                            tint = Gold400,
-                            modifier = Modifier.size(12.dp)
+                        Text(
+                            text = if (savedName.isNotBlank()) "Chatting as: $savedName ${if (savedContact.isNotBlank()) "($savedContact)" else ""}" else if (savedContact.isNotBlank()) "Chatting as: $savedContact" else "Chatting as: Community Member",
+                            fontSize = 11.sp,
+                            color = Color.White,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
                         )
                     }
                 }
@@ -683,63 +671,6 @@ fun UserWhatsAppChatView(
                 }
             }
         }
-    }
-
-    // Edit Profile/Identity Dialog
-    if (showProfileDialog) {
-        var tempName by remember { mutableStateOf(savedName) }
-        var tempContact by remember { mutableStateOf(savedContact) }
-
-        AlertDialog(
-            onDismissRequest = { showProfileDialog = false },
-            title = { Text("Your Contact Profile", fontWeight = FontWeight.Bold) },
-            text = {
-                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    Text(
-                        "Providing your details allows the Mosque administration to address you by name and contact you if follow-up is required.",
-                        fontSize = 12.sp,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-
-                    OutlinedTextField(
-                        value = tempName,
-                        onValueChange = { tempName = it },
-                        label = { Text("Your Full Name") },
-                        placeholder = { Text("e.g. Muhammad Tariq") },
-                        singleLine = true,
-                        modifier = Modifier.fillMaxWidth()
-                    )
-
-                    OutlinedTextField(
-                        value = tempContact,
-                        onValueChange = { tempContact = it },
-                        label = { Text("WhatsApp / Phone / Email") },
-                        placeholder = { Text("e.g. +92 300 1234567") },
-                        singleLine = true,
-                        modifier = Modifier.fillMaxWidth()
-                    )
-                }
-            },
-            confirmButton = {
-                Button(
-                    onClick = {
-                        savedName = tempName.trim()
-                        savedContact = tempContact.trim()
-                        prefs.edit()
-                            .putString("last_sender_name", savedName)
-                            .putString("last_sender_contact", savedContact)
-                            .apply()
-                        showProfileDialog = false
-                    },
-                    colors = ButtonDefaults.buttonColors(containerColor = Emerald800)
-                ) {
-                    Text("Save Profile")
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { showProfileDialog = false }) { Text("Cancel") }
-            }
-        )
     }
 
     // Helpline Information Dialog
