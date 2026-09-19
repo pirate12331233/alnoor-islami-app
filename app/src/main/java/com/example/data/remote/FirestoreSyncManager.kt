@@ -237,122 +237,132 @@ class FirestoreSyncManager private constructor() {
             val prefs = context.getSharedPreferences("alnoor_sync_prefs", Context.MODE_PRIVATE)
             val db = AppDatabase.getDatabase(context)
 
-            // 0. Check Urgent Full-Screen Flash Alerts (Alarm/Call Style over lockscreen)
             val flashV = getLongValue(fields, "flash_broadcast_v", 0L)
-            val lastFlashV = prefs.getLong("bg_flash_broadcast_v", 0L)
-            if (flashV > lastFlashV) {
-                val remoteFlashList = fetchCollection("flash_broadcasts")
-                if (remoteFlashList.isNotEmpty()) {
-                    val nowMs = System.currentTimeMillis()
-                    remoteFlashList.forEach { flashDoc ->
-                        val alertFields = flashDoc.optJSONObject("fields") ?: JSONObject()
-                        val alertId = getStringValue(alertFields, "id", "")
-                        val title = getStringValue(alertFields, "title", "Urgent Mosque Announcement")
-                        val message = getStringValue(alertFields, "message", "")
-                        val formattedTimestamp = getStringValue(
-                            alertFields,
-                            "formattedTimestamp",
-                            SimpleDateFormat("MMM dd, yyyy - hh:mm a", Locale.getDefault()).format(Date())
-                        )
-                        val timestamp = getLongValue(alertFields, "timestamp", nowMs)
-                        val isRecent = (nowMs - timestamp) < (48 * 3600 * 1000L) // active within last 48 hours
+            var lastFlashV = prefs.getLong("bg_flash_broadcast_v", 0L)
+            if (lastFlashV > flashV && flashV > 0L) lastFlashV = 0L
 
-                        if (alertId.isNotBlank() && message.isNotBlank()) {
-                            val isAlreadyShown = AlnoorBackgroundSyncReceiver.isAlertShown(context, alertId)
-                            if (!isAlreadyShown && isRecent) {
-                                // 1. Pop up full-screen alarm alert over lockscreen
-                                NotificationHelper.showFlashMessageAlert(
-                                    context = context,
-                                    title = title,
-                                    message = message,
-                                    timestamp = formattedTimestamp,
-                                    alertId = alertId
-                                )
-                                AlnoorBackgroundSyncReceiver.markAlertShown(context, alertId)
-                            } else if (!isRecent && !isAlreadyShown) {
-                                AlnoorBackgroundSyncReceiver.markAlertShown(context, alertId)
-                            }
-
-                            // 2. Store in user's 1-to-1 helpline chat history with date/time stamp
-                            try {
-                                db.inquiriesDao().insertInquiry(
-                                    UserInquiryEntity(
-                                        id = alertId,
-                                        senderName = "Alnoor Mosque Administration",
-                                        senderContact = "helpline@alnoor.org",
-                                        category = "GENERAL",
-                                        subject = "⚡ FLASH: $title",
-                                        message = message,
-                                        timestamp = formattedTimestamp,
-                                        status = "RESOLVED",
-                                        reply = null,
-                                        isRead = false,
-                                        internalNotes = "Urgent Broadcast to All Community Devices",
-                                        isFromAdmin = true,
-                                        threadId = "FLASH_BROADCAST",
-                                        createdAt = timestamp
-                                    )
-                                )
-                            } catch (e: Exception) {
-                                Log.w(TAG, "Failed to insert flash inquiry: ${e.message}")
-                            }
-                        }
-                    }
-                }
-                prefs.edit().putLong("bg_flash_broadcast_v", maxOf(flashV, System.currentTimeMillis())).apply()
-            }
-
-            // 1. Check Broadcast Alerts with ID tracking & Deduplication
             val broadcastV = getLongValue(fields, "broadcast_v", 0L)
-            val lastBroadcastV = prefs.getLong("bg_broadcast_v", 0L)
-            if (broadcastV > lastBroadcastV) {
-                val remoteAlerts = fetchCollection("broadcast_notifications")
-                if (remoteAlerts.isNotEmpty()) {
-                    if (lastBroadcastV == 0L) {
-                        // First run on this device: mark existing alerts as already shown so past notifications are not re-alerted
-                        val allIds = remoteAlerts.mapNotNull {
-                            val alertFields = it.optJSONObject("fields") ?: JSONObject()
-                            getStringValue(alertFields, "id", "").takeIf { id -> id.isNotBlank() }
-                        }
-                        AlnoorBackgroundSyncReceiver.markAlertsShown(context, allIds)
-                    } else {
-                        val unseenAlerts = remoteAlerts.filter {
-                            val alertFields = it.optJSONObject("fields") ?: JSONObject()
-                            val id = getStringValue(alertFields, "id", "")
-                            id.isNotBlank() && !AlnoorBackgroundSyncReceiver.isAlertShown(context, id)
-                        }
-                        val latest = unseenAlerts.maxByOrNull {
-                            getLongValue(it.optJSONObject("fields") ?: JSONObject(), "timestamp", 0L)
-                        }
-                        if (latest != null) {
-                            val alertFields = latest.optJSONObject("fields") ?: JSONObject()
-                            val alertId = getStringValue(alertFields, "id", "")
-                            val title = getStringValue(alertFields, "title", "Alnoor Community Alert")
-                            val body = getStringValue(alertFields, "body", "")
-                            val targetTab = getStringValue(alertFields, "targetTab", "")
-                            NotificationHelper.showHeadsUpNotification(
+            var lastBroadcastV = prefs.getLong("bg_broadcast_v", 0L)
+            if (lastBroadcastV > broadcastV && broadcastV > 0L) lastBroadcastV = 0L
+
+            val eventsV = getLongValue(fields, "events_v", 0L)
+            var lastEventsV = prefs.getLong("bg_events_v", 0L)
+            if (lastEventsV > eventsV && eventsV > 0L) lastEventsV = 0L
+
+            val noticesV = getLongValue(fields, "notices_v", 0L)
+            var lastNoticesV = prefs.getLong("bg_notices_v", 0L)
+            if (lastNoticesV > noticesV && noticesV > 0L) lastNoticesV = 0L
+
+            val popupV = getLongValue(fields, "popup_v", 0L)
+            var lastPopupV = prefs.getLong("bg_popup_v", 0L)
+            if (lastPopupV > popupV && popupV > 0L) lastPopupV = 0L
+
+            val nowMs = System.currentTimeMillis()
+
+            // 0. Check Urgent Full-Screen Flash Alerts (Alarm/Call Style over lockscreen)
+            val remoteFlashList = fetchCollection("flash_broadcasts", orderBy = "timestamp desc", pageSize = 10)
+            if (remoteFlashList.isNotEmpty()) {
+                remoteFlashList.forEach { flashDoc ->
+                    val alertFields = flashDoc.optJSONObject("fields") ?: JSONObject()
+                    val alertId = getStringValue(alertFields, "id", "")
+                    val title = getStringValue(alertFields, "title", "Urgent Mosque Announcement")
+                    val message = getStringValue(alertFields, "message", "")
+                    val formattedTimestamp = getStringValue(
+                        alertFields,
+                        "formattedTimestamp",
+                        SimpleDateFormat("MMM dd, yyyy - hh:mm a", Locale.getDefault()).format(Date())
+                    )
+                    val timestamp = getLongValue(alertFields, "timestamp", nowMs)
+                    val isRecent = (nowMs - timestamp) < (48 * 3600 * 1000L) // active within last 48 hours
+
+                    if (alertId.isNotBlank() && message.isNotBlank()) {
+                        val isAlreadyShown = AlnoorBackgroundSyncReceiver.isAlertShown(context, alertId)
+                        if (!isAlreadyShown && isRecent) {
+                            // 1. Pop up full-screen alarm alert over lockscreen
+                            NotificationHelper.showFlashMessageAlert(
                                 context = context,
                                 title = title,
-                                body = body,
-                                targetTab = if (targetTab.isNotBlank()) targetTab else null
+                                message = message,
+                                timestamp = formattedTimestamp,
+                                alertId = alertId
                             )
-                            if (alertId.isNotBlank()) {
-                                AlnoorBackgroundSyncReceiver.markAlertShown(context, alertId)
-                            }
-                            unseenAlerts.forEach { unseen ->
-                                val uId = getStringValue(unseen.optJSONObject("fields") ?: JSONObject(), "id", "")
-                                if (uId.isNotBlank()) AlnoorBackgroundSyncReceiver.markAlertShown(context, uId)
-                            }
+                            AlnoorBackgroundSyncReceiver.markAlertShown(context, alertId)
+                        } else if (!isRecent && !isAlreadyShown) {
+                            AlnoorBackgroundSyncReceiver.markAlertShown(context, alertId)
+                        }
+
+                        // 2. Store in user's 1-to-1 helpline chat history with date/time stamp
+                        try {
+                            db.inquiriesDao().insertInquiry(
+                                UserInquiryEntity(
+                                    id = alertId,
+                                    senderName = "Alnoor Mosque Administration",
+                                    senderContact = "helpline@alnoor.org",
+                                    category = "GENERAL",
+                                    subject = "⚡ FLASH: $title",
+                                    message = message,
+                                    timestamp = formattedTimestamp,
+                                    status = "RESOLVED",
+                                    reply = null,
+                                    isRead = false,
+                                    internalNotes = "Urgent Broadcast to All Community Devices",
+                                    isFromAdmin = true,
+                                    threadId = "FLASH_BROADCAST",
+                                    createdAt = timestamp
+                                )
+                            )
+                        } catch (e: Exception) {
+                            Log.w(TAG, "Failed to insert flash inquiry: ${e.message}")
                         }
                     }
                 }
-                prefs.edit().putLong("bg_broadcast_v", maxOf(broadcastV, System.currentTimeMillis())).apply()
             }
+            prefs.edit().putLong("bg_flash_broadcast_v", flashV).apply()
+
+            // 1. Check Broadcast Alerts with ID tracking & Deduplication
+            val remoteAlerts = fetchCollection("broadcast_notifications", orderBy = "timestamp desc", pageSize = 15)
+            if (remoteAlerts.isNotEmpty()) {
+                val unseenAlerts = remoteAlerts.filter {
+                    val alertFields = it.optJSONObject("fields") ?: JSONObject()
+                    val id = getStringValue(alertFields, "id", "")
+                    val timestamp = getLongValue(alertFields, "timestamp", 0L)
+                    val isRecent = (nowMs - timestamp) < (24 * 3600 * 1000L)
+                    id.isNotBlank() && isRecent && !AlnoorBackgroundSyncReceiver.isAlertShown(context, id)
+                }
+
+                unseenAlerts.forEach { unseen ->
+                    val alertFields = unseen.optJSONObject("fields") ?: JSONObject()
+                    val alertId = getStringValue(alertFields, "id", "")
+                    val title = getStringValue(alertFields, "title", "Alnoor Community Alert")
+                    val body = getStringValue(alertFields, "body", "")
+                    val targetTab = getStringValue(alertFields, "targetTab", "")
+                    val isFlash = getStringValue(alertFields, "type", "") == "flash" || title.contains("FLASH", ignoreCase = true)
+
+                    if (isFlash) {
+                        NotificationHelper.showFlashMessageAlert(
+                            context = context,
+                            title = title,
+                            message = body,
+                            timestamp = SimpleDateFormat("MMM dd, yyyy - hh:mm a", Locale.getDefault()).format(Date()),
+                            alertId = alertId
+                        )
+                    } else {
+                        NotificationHelper.showHeadsUpNotification(
+                            context = context,
+                            title = title,
+                            body = body,
+                            targetTab = if (targetTab.isNotBlank()) targetTab else null
+                        )
+                    }
+                    if (alertId.isNotBlank()) {
+                        AlnoorBackgroundSyncReceiver.markAlertShown(context, alertId)
+                    }
+                }
+            }
+            prefs.edit().putLong("bg_broadcast_v", broadcastV).apply()
 
             // 2. Check Events with Deduplication
-            val eventsV = getLongValue(fields, "events_v", 0L)
-            val lastEventsV = prefs.getLong("bg_events_v", 0L)
-            if (eventsV > lastEventsV) {
+            if (eventsV > lastEventsV || lastEventsV == 0L) {
                 val remoteEvents = fetchCollection("community_events")
                 if (remoteEvents.isNotEmpty()) {
                     val eventEntities = remoteEvents.mapNotNull { parseEventEntity(it) }
@@ -399,13 +409,11 @@ class FirestoreSyncManager private constructor() {
                         }
                     }
                 }
-                prefs.edit().putLong("bg_events_v", maxOf(eventsV, System.currentTimeMillis())).apply()
+                prefs.edit().putLong("bg_events_v", eventsV).apply()
             }
 
             // 3. Check Notices with Deduplication
-            val noticesV = getLongValue(fields, "notices_v", 0L)
-            val lastNoticesV = prefs.getLong("bg_notices_v", 0L)
-            if (noticesV > lastNoticesV) {
+            if (noticesV > lastNoticesV || lastNoticesV == 0L) {
                 val remoteNotices = fetchCollection("notice_items")
                 if (remoteNotices.isNotEmpty()) {
                     val noticeEntities = remoteNotices.mapNotNull { parseNoticeEntity(it) }
@@ -453,15 +461,13 @@ class FirestoreSyncManager private constructor() {
                         }
                     }
                 }
-                prefs.edit().putLong("bg_notices_v", maxOf(noticesV, System.currentTimeMillis())).apply()
+                prefs.edit().putLong("bg_notices_v", noticesV).apply()
             }
 
             // 4. Check Popups
-            val popupV = getLongValue(fields, "popup_v", 0L)
-            val lastPopupV = prefs.getLong("bg_popup_v", 0L)
-            if (popupV > lastPopupV) {
+            if (popupV > lastPopupV || lastPopupV == 0L) {
                 syncPopupSection(db)
-                prefs.edit().putLong("bg_popup_v", maxOf(popupV, System.currentTimeMillis())).apply()
+                prefs.edit().putLong("bg_popup_v", popupV).apply()
             }
         } catch (e: Exception) {
             Log.w(TAG, "Background sync error: ${e.message}")
@@ -523,6 +529,34 @@ class FirestoreSyncManager private constructor() {
             _initialSyncMessage.value = "Fetching Events, Notices & Library..."
             syncAllCollectionsFromCloud(db, null)
 
+            // Prime the manifest version trackers with the actual Firestore cloud versions
+            val manifestDoc = fetchDocument("app_settings", "sync_manifest")
+            if (manifestDoc != null) {
+                val fields = manifestDoc.optJSONObject("fields") ?: JSONObject()
+                val keys = fields.keys()
+                while (keys.hasNext()) {
+                    val key = keys.next()
+                    if (key.endsWith("_v")) {
+                        val section = key.removeSuffix("_v")
+                        val v = getLongValue(fields, key, 0L)
+                        lastKnownVersions[section] = v
+                    }
+                }
+                val context = AlnoorApp.instance
+                if (context != null) {
+                    val prefs = context.getSharedPreferences("alnoor_sync_prefs", Context.MODE_PRIVATE)
+                    val editor = prefs.edit()
+                    val pKeys = fields.keys()
+                    while (pKeys.hasNext()) {
+                        val key = pKeys.next()
+                        if (key.endsWith("_v")) {
+                            editor.putLong("bg_$key", getLongValue(fields, key, 0L))
+                        }
+                    }
+                    editor.apply()
+                }
+            }
+
             onStatusUpdate?.invoke("Finalizing community sync...")
             _initialSyncMessage.value = "Finalizing community sync..."
             _isInitialSyncComplete.value = true
@@ -578,6 +612,13 @@ class FirestoreSyncManager private constructor() {
             lastKnownVersions["flash_broadcast"] = flashV
         }
 
+        // 0b. Broadcast Notifications (Mahafil updates, Notices & Announcements)
+        val broadcastV = getLongValue(fields, "broadcast_v", 0L)
+        if (isInitial || broadcastV > (lastKnownVersions["broadcast"] ?: 0L)) {
+            syncBroadcastSection(db, if (isInitial) null else onNotificationReceived)
+            lastKnownVersions["broadcast"] = broadcastV
+        }
+
         // 1. Action Cards
         val actionCardsV = getLongValue(fields, "action_cards_v", 0L)
         if (isInitial || actionCardsV > (lastKnownVersions["action_cards"] ?: 0L)) {
@@ -587,77 +628,77 @@ class FirestoreSyncManager private constructor() {
                     onActionCardsReceived?.invoke(remoteCards)
                 }
             }
-            lastKnownVersions["action_cards"] = maxOf(actionCardsV, System.currentTimeMillis())
+            lastKnownVersions["action_cards"] = actionCardsV
         }
 
         // 2. Registered Users
         val usersV = getLongValue(fields, "users_v", 0L)
         if (isInitial || usersV > (lastKnownVersions["users"] ?: 0L)) {
             syncUsersSection(db)
-            lastKnownVersions["users"] = maxOf(usersV, System.currentTimeMillis())
+            lastKnownVersions["users"] = usersV
         }
 
         // 3. Community Events
         val eventsV = getLongValue(fields, "events_v", 0L)
         if (isInitial || eventsV > (lastKnownVersions["events"] ?: 0L)) {
             syncEventsSection(db, if (isInitial) null else onNotificationReceived)
-            lastKnownVersions["events"] = maxOf(eventsV, System.currentTimeMillis())
+            lastKnownVersions["events"] = eventsV
         }
 
         // 4. Notices
         val noticesV = getLongValue(fields, "notices_v", 0L)
         if (isInitial || noticesV > (lastKnownVersions["notices"] ?: 0L)) {
             syncNoticesSection(db, if (isInitial) null else onNotificationReceived)
-            lastKnownVersions["notices"] = maxOf(noticesV, System.currentTimeMillis())
+            lastKnownVersions["notices"] = noticesV
         }
 
         // 5. Popup Notice
         val popupV = getLongValue(fields, "popup_v", 0L)
         if (isInitial || popupV > (lastKnownVersions["popup"] ?: 0L)) {
             syncPopupSection(db)
-            lastKnownVersions["popup"] = maxOf(popupV, System.currentTimeMillis())
+            lastKnownVersions["popup"] = popupV
         }
 
         // 6. Islamic Books
         val booksV = getLongValue(fields, "books_v", 0L)
         if (isInitial || booksV > (lastKnownVersions["books"] ?: 0L)) {
             syncBooksSection(db)
-            lastKnownVersions["books"] = maxOf(booksV, System.currentTimeMillis())
+            lastKnownVersions["books"] = booksV
         }
 
         // 7. Gallery Albums & Photos
         val galleryV = getLongValue(fields, "gallery_v", 0L)
         if (isInitial || galleryV > (lastKnownVersions["gallery"] ?: 0L)) {
             syncGallerySection(db)
-            lastKnownVersions["gallery"] = maxOf(galleryV, System.currentTimeMillis())
+            lastKnownVersions["gallery"] = galleryV
         }
 
         // 8. Gallery Assets
         val assetsV = getLongValue(fields, "assets_v", 0L)
         if (isInitial || assetsV > (lastKnownVersions["assets"] ?: 0L)) {
             syncAssetsSection(db)
-            lastKnownVersions["assets"] = maxOf(assetsV, System.currentTimeMillis())
+            lastKnownVersions["assets"] = assetsV
         }
 
         // 9. Inquiries
         val inquiriesV = getLongValue(fields, "inquiries_v", 0L)
         if (isInitial || inquiriesV > (lastKnownVersions["inquiries"] ?: 0L)) {
             syncInquiriesSection(db)
-            lastKnownVersions["inquiries"] = maxOf(inquiriesV, System.currentTimeMillis())
+            lastKnownVersions["inquiries"] = inquiriesV
         }
 
         // 10. Darood Submissions
         val daroodV = getLongValue(fields, "darood_v", 0L)
         if (isInitial || daroodV > (lastKnownVersions["darood"] ?: 0L)) {
             syncDaroodSection(db)
-            lastKnownVersions["darood"] = maxOf(daroodV, System.currentTimeMillis())
+            lastKnownVersions["darood"] = daroodV
         }
 
         // 11. App Version & Forced Update Info
         val appVersionV = getLongValue(fields, "app_version_v", 0L)
         if (isInitial || appVersionV > (lastKnownVersions["app_version"] ?: 0L)) {
             syncAppVersionSection()
-            lastKnownVersions["app_version"] = maxOf(appVersionV, System.currentTimeMillis())
+            lastKnownVersions["app_version"] = appVersionV
         }
 
         return 12L // Check manifest every 12 seconds
@@ -681,7 +722,7 @@ class FirestoreSyncManager private constructor() {
 
     suspend fun syncFlashBroadcastSection(db: AppDatabase, isInitial: Boolean = false) {
         try {
-            val remoteFlashList = fetchCollection("flash_broadcasts")
+            val remoteFlashList = fetchCollection("flash_broadcasts", orderBy = "timestamp desc", pageSize = 10)
             if (remoteFlashList.isNotEmpty()) {
                 val context = AlnoorApp.instance
                 val nowMs = System.currentTimeMillis()
@@ -744,6 +785,61 @@ class FirestoreSyncManager private constructor() {
             }
         } catch (e: Exception) {
             Log.w(TAG, "Error syncing flash broadcast section: ${e.message}")
+        }
+    }
+
+    suspend fun syncBroadcastSection(
+        db: AppDatabase,
+        onNotificationReceived: ((title: String, body: String) -> Unit)? = null
+    ) {
+        try {
+            val remoteAlerts = fetchCollection("broadcast_notifications", orderBy = "timestamp desc", pageSize = 15)
+            if (remoteAlerts.isNotEmpty()) {
+                val context = AlnoorApp.instance
+                val nowMs = System.currentTimeMillis()
+                val unseenAlerts = remoteAlerts.filter { doc ->
+                    val alertFields = doc.optJSONObject("fields") ?: JSONObject()
+                    val id = getStringValue(alertFields, "id", "")
+                    val timestamp = getLongValue(alertFields, "timestamp", 0L)
+                    val isRecent = (nowMs - timestamp) < (24 * 3600 * 1000L)
+                    id.isNotBlank() && isRecent && context != null && !AlnoorBackgroundSyncReceiver.isAlertShown(context, id)
+                }
+
+                unseenAlerts.forEach { alertDoc ->
+                    val alertFields = alertDoc.optJSONObject("fields") ?: JSONObject()
+                    val alertId = getStringValue(alertFields, "id", "")
+                    val title = getStringValue(alertFields, "title", "Alnoor Community Alert")
+                    val body = getStringValue(alertFields, "body", "")
+                    val targetTab = getStringValue(alertFields, "targetTab", "")
+                    val isFlash = getStringValue(alertFields, "type", "") == "flash" || title.contains("FLASH", ignoreCase = true)
+
+                    if (context != null) {
+                        if (isFlash) {
+                            NotificationHelper.showFlashMessageAlert(
+                                context = context,
+                                title = title,
+                                message = body,
+                                timestamp = SimpleDateFormat("MMM dd, yyyy - hh:mm a", Locale.getDefault()).format(Date()),
+                                alertId = alertId
+                            )
+                        } else {
+                            NotificationHelper.showHeadsUpNotification(
+                                context = context,
+                                title = title,
+                                body = body,
+                                targetTab = if (targetTab.isNotBlank()) targetTab else null
+                            )
+                        }
+                        AlnoorBackgroundSyncReceiver.markAlertShown(context, alertId)
+                    }
+
+                    withContext(Dispatchers.Main) {
+                        onNotificationReceived?.invoke(title, body)
+                    }
+                }
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed syncing broadcast notifications: ${e.message}")
         }
     }
 
@@ -1642,8 +1738,9 @@ class FirestoreSyncManager private constructor() {
     // Low-Level HTTP Helpers for Firestore REST API
     // -------------------------------------------------------------------------
 
-    private fun fetchCollection(collectionName: String): List<JSONObject> {
-        val url = "$BASE_URL/$collectionName?key=$API_KEY&pageSize=300"
+    private fun fetchCollection(collectionName: String, orderBy: String? = null, pageSize: Int = 300): List<JSONObject> {
+        val orderParam = if (!orderBy.isNullOrBlank()) "&orderBy=${java.net.URLEncoder.encode(orderBy, "UTF-8")}" else ""
+        val url = "$BASE_URL/$collectionName?key=$API_KEY&pageSize=$pageSize$orderParam"
         val request = Request.Builder().url(url).get().build()
         httpClient.newCall(request).execute().use { response ->
             if (!response.isSuccessful) {
