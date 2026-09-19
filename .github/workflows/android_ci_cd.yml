@@ -34,6 +34,9 @@ jobs:
       contents: write
       packages: write
       actions: read
+    env:
+      GCP_SA_KEY: ${{ secrets.GCP_SA_KEY }}
+      FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
 
     steps:
       - name: Checkout Source Code
@@ -221,14 +224,14 @@ jobs:
       # -------------------------------------------------------------
       - name: Authenticate to Google Cloud / Firebase
         id: gcp_auth
-        if: "${{ secrets.GCP_SA_KEY != '' || secrets.FIREBASE_SERVICE_ACCOUNT != '' }}"
+        if: "${{ env.GCP_SA_KEY != '' || env.FIREBASE_SERVICE_ACCOUNT != '' }}"
         uses: google-github-actions/auth@v2
         with:
-          credentials_json: ${{ secrets.GCP_SA_KEY || secrets.FIREBASE_SERVICE_ACCOUNT }}
+          credentials_json: ${{ env.GCP_SA_KEY || env.FIREBASE_SERVICE_ACCOUNT }}
 
       - name: Upload APK to Firebase Cloud Storage (Google Global CDN)
         id: upload_firebase_storage
-        if: "${{ steps.gcp_auth.outputs.access_token != '' }}"
+        if: "${{ steps.gcp_auth.conclusion == 'success' && steps.gcp_auth.outputs.access_token != '' }}"
         run: |
           STORAGE_BUCKET="alnoor-islami-8763b.firebasestorage.app"
           APK_FILE="${{ steps.find_apk.outputs.apk_path }}"
