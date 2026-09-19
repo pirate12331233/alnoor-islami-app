@@ -571,6 +571,7 @@ fun AppUpdateMandatoryScreen(
                             ApkInstallerUtils.downloadAndInstallApk(
                                 context = context,
                                 downloadUrl = versionInfo.apkDownloadUrl,
+                                fallbackUrl = versionInfo.fallbackApkDownloadUrl,
                                 onProgress = { progress ->
                                     downloadProgress = progress
                                 },
@@ -617,7 +618,7 @@ fun AppUpdateMandatoryScreen(
                     )
                     Spacer(modifier = Modifier.width(8.dp))
                     Text(
-                        text = "Download & Install Update (Fast Direct)",
+                        text = if (downloadProgress > 0.05f && downloadProgress < 0.99f) "Resume & Install Update" else "Download & Install Update (Fast Direct)",
                         fontSize = 14.sp,
                         fontWeight = FontWeight.Bold
                     )

@@ -215,11 +215,67 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       # -------------------------------------------------------------
+      # Automated Firebase Cloud Storage Upload (Google Global CDN)
+      # Provides 5-second ultra-fast downloads in Pakistan and South Asia.
+      # Requires GCP_SA_KEY or FIREBASE_SERVICE_ACCOUNT secret in GitHub repository settings.
+      # -------------------------------------------------------------
+      - name: Authenticate to Google Cloud / Firebase
+        id: gcp_auth
+        if: "${{ secrets.GCP_SA_KEY != '' || secrets.FIREBASE_SERVICE_ACCOUNT != '' }}"
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY || secrets.FIREBASE_SERVICE_ACCOUNT }}
+
+      - name: Upload APK to Firebase Cloud Storage (Google Global CDN)
+        id: upload_firebase_storage
+        if: "${{ steps.gcp_auth.outputs.access_token != '' }}"
+        run: |
+          STORAGE_BUCKET="alnoor-islami-8763b.firebasestorage.app"
+          APK_FILE="${{ steps.find_apk.outputs.apk_path }}"
+          VERSION_NAME="${{ steps.version_calc.outputs.version_name }}"
+          VERSION_CODE="${{ steps.version_calc.outputs.version_code }}"
+          
+          echo "🚀 Uploading $APK_FILE to Firebase Cloud Storage bucket $STORAGE_BUCKET..."
+          
+          # Generate persistent download token for direct, publicly accessible CDN download
+          DOWNLOAD_TOKEN=$(cat /proc/sys/kernel/random/uuid 2>/dev/null || python3 -c 'import uuid; print(uuid.uuid4())')
+          ACCESS_TOKEN="${{ steps.gcp_auth.outputs.access_token }}"
+          
+          # Upload latest app-release.apk to releases/ folder
+          HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" -X POST \
+            -H "Authorization: Bearer $ACCESS_TOKEN" \
+            -H "Content-Type: application/vnd.android.package-archive" \
+            -H "x-goog-meta-firebaseStorageDownloadTokens: $DOWNLOAD_TOKEN" \
+            --data-binary "@$APK_FILE" \
+            "https://firebasestorage.googleapis.com/v0/b/${STORAGE_BUCKET}/o?uploadType=media&name=releases%2Fapp-release.apk")
+            
+          if [ "$HTTP_CODE" -ge 200 ] && [ "$HTTP_CODE" -lt 300 ]; then
+            FIREBASE_DIRECT_URL="https://firebasestorage.googleapis.com/v0/b/${STORAGE_BUCKET}/o/releases%2Fapp-release.apk?alt=media&token=${DOWNLOAD_TOKEN}"
+            echo "firebase_url=$FIREBASE_DIRECT_URL" >> $GITHUB_OUTPUT
+            echo "✅ Successfully uploaded APK to Firebase Cloud Storage!"
+            echo "⚡ Direct Google CDN URL: $FIREBASE_DIRECT_URL"
+          else
+            echo "⚠️ Warning: Firebase Storage upload returned HTTP code $HTTP_CODE. Falling back to GitHub release link."
+          fi
+
+      # -------------------------------------------------------------
       # Update Firestore Cloud App Version Document & Trigger Forced Update
       # -------------------------------------------------------------
       - name: Update Cloud App Version in Firebase Firestore
         run: |
-          APK_DOWNLOAD_URL="https://github.com/${{ github.repository }}/releases/latest/download/app-release.apk"
+          GITHUB_RELEASE_URL="https://github.com/${{ github.repository }}/releases/latest/download/app-release.apk"
+          FIREBASE_URL="${{ steps.upload_firebase_storage.outputs.firebase_url }}"
+          
+          if [ -n "$FIREBASE_URL" ]; then
+            APK_DOWNLOAD_URL="$FIREBASE_URL"
+            FALLBACK_DOWNLOAD_URL="$GITHUB_RELEASE_URL"
+            echo "Using fast Firebase Cloud Storage as primary download link, with GitHub Releases as fallback mirror."
+          else
+            APK_DOWNLOAD_URL="$GITHUB_RELEASE_URL"
+            FALLBACK_DOWNLOAD_URL=""
+            echo "GCP_SA_KEY not configured or upload failed. Using GitHub Releases download link."
+          fi
+          
           VERSION_CODE="${{ steps.version_calc.outputs.version_code }}"
           VERSION_NAME="${{ steps.version_calc.outputs.version_name }}"
           MIN_SUPPORTED="${{ github.event.inputs.min_supported_version || '1' }}"
@@ -238,6 +294,7 @@ jobs:
               "minSupportedVersionCode": { "integerValue": "$MIN_SUPPORTED" },
               "isForcedUpdate": { "booleanValue": $IS_FORCED },
               "apkDownloadUrl": { "stringValue": "$APK_DOWNLOAD_URL" },
+              "fallbackApkDownloadUrl": { "stringValue": "$FALLBACK_DOWNLOAD_URL" },
               "releaseNotes": { "stringValue": "$RELEASE_NOTES" },
               "releaseDate": { "stringValue": "$(date '+%B %d, %Y')" },
               "apkSizeMb": { "stringValue": "$APK_SIZE" },

@@ -286,6 +286,7 @@ data class AppVersionInfo(
     val minSupportedVersionCode: Int = 1,
     val isForcedUpdate: Boolean = false,
     val apkDownloadUrl: String = "https://github.com/AlnoorIslami/alnoor-islamic-app/releases/latest/download/app-release.apk",
+    val fallbackApkDownloadUrl: String = "",
     val releaseNotes: String = "• Important performance and cloud sync upgrades\n• Support for login notice posters and interactive popups\n• General stability improvements",
     val releaseDate: String = "August 2026",
     val apkSizeMb: String = "19.5 MB"

@@ -989,6 +989,9 @@ class FirestoreSyncManager private constructor() {
                     put("minSupportedVersionCode", intField(info.minSupportedVersionCode))
                     put("isForcedUpdate", booleanField(info.isForcedUpdate))
                     put("apkDownloadUrl", stringField(info.apkDownloadUrl))
+                    if (info.fallbackApkDownloadUrl.isNotBlank()) {
+                        put("fallbackApkDownloadUrl", stringField(info.fallbackApkDownloadUrl))
+                    }
                     put("releaseNotes", stringField(info.releaseNotes))
                     put("releaseDate", stringField(info.releaseDate))
                     put("apkSizeMb", stringField(info.apkSizeMb))
@@ -1876,6 +1879,11 @@ class FirestoreSyncManager private constructor() {
                 fields,
                 "apkDownloadUrl",
                 "https://github.com/AlnoorIslami/alnoor-islamic-app/releases/latest/download/app-release.apk"
+            ),
+            fallbackApkDownloadUrl = getStringValue(
+                fields,
+                "fallbackApkDownloadUrl",
+                ""
             ),
             releaseNotes = getStringValue(
                 fields,

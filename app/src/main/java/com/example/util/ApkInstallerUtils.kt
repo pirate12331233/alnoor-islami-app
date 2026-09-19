@@ -12,6 +12,7 @@ import android.util.Log
 import android.widget.Toast
 import androidx.core.content.FileProvider
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -22,9 +23,12 @@ import java.util.concurrent.TimeUnit
 object ApkInstallerUtils {
     private const val TAG = "ApkInstallerUtils"
 
+    // Generous timeouts to tolerate slow or congested international network routes (up to 3 minutes read timeout)
     private val httpClient = OkHttpClient.Builder()
-        .connectTimeout(30, TimeUnit.SECONDS)
-        .readTimeout(60, TimeUnit.SECONDS)
+        .connectTimeout(45, TimeUnit.SECONDS)
+        .readTimeout(180, TimeUnit.SECONDS)
+        .writeTimeout(180, TimeUnit.SECONDS)
+        .retryOnConnectionFailure(true)
         .followRedirects(true)
         .followSslRedirects(true)
         .build()
@@ -111,11 +115,12 @@ object ApkInstallerUtils {
     }
 
     /**
-     * Verifies that the given file exists, has a non-trivial size, and starts with ZIP magic bytes (PK).
+     * Verifies that the given file exists, has a plausible update size (>= 10 MB),
+     * starts with ZIP magic bytes (PK), and can be parsed by Android's package archive parser.
      */
-    fun isValidApkFile(file: File): Boolean {
-        if (!file.exists() || file.length() < 50_000) return false
-        return try {
+    fun isValidApkFile(file: File, context: Context? = null): Boolean {
+        if (!file.exists() || file.length() < 10_000_000L) return false // Update APK is ~19 MB, never < 10 MB
+        val startsWithZip = try {
             java.io.FileInputStream(file).use { fis ->
                 val magic = ByteArray(2)
                 val read = fis.read(magic)
@@ -124,19 +129,49 @@ object ApkInstallerUtils {
         } catch (e: Exception) {
             false
         }
+        if (!startsWithZip) return false
+
+        // Comprehensive verification: Check that Android OS package parser can parse the archive
+        if (context != null) {
+            return try {
+                val pm = context.packageManager
+                val info = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                    pm.getPackageArchiveInfo(file.absolutePath, PackageManager.PackageInfoFlags.of(0))
+                } else {
+                    @Suppress("DEPRECATION")
+                    pm.getPackageArchiveInfo(file.absolutePath, 0)
+                }
+                info != null && !info.packageName.isNullOrBlank()
+            } catch (e: Exception) {
+                false
+            }
+        }
+        return true
     }
 
     /**
      * Scans for an already downloaded update APK on the device storage.
-     * Helpful when users download via browser and it gets stuck at 100% or finishes in Downloads folder.
+     * Cleans up any partial/incomplete files (such as interrupted downloads) so users are never misled.
      */
     fun findExistingDownloadedApk(context: Context): File? {
         try {
             // 1. Check app's external downloads directory
             val appDownloadsDir = context.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS)
             if (appDownloadsDir != null && appDownloadsDir.exists()) {
+                val allApkFiles = appDownloadsDir.listFiles()?.filter {
+                    it.name.endsWith(".apk", ignoreCase = true)
+                } ?: emptyList()
+
+                // Remove broken/partial downloads (e.g. 4.7 MB interrupted files)
+                for (file in allApkFiles) {
+                    if (!isValidApkFile(file, context)) {
+                        Log.i(TAG, "Cleaning up partial/corrupt APK from app storage: ${file.name} (${file.length()} bytes)")
+                        file.delete()
+                    }
+                }
+
                 val files = appDownloadsDir.listFiles()?.filter {
-                    it.name.endsWith(".apk", ignoreCase = true) && it.length() > 5_000_000 && isValidApkFile(it)
+                    it.name.endsWith(".apk", ignoreCase = true) && isValidApkFile(it, context)
                 }?.sortedByDescending { it.lastModified() }
                 if (!files.isNullOrEmpty()) {
                     return files.first()
@@ -151,8 +186,7 @@ object ApkInstallerUtils {
                      it.name.contains("alnoor", ignoreCase = true) ||
                      it.name.contains("update", ignoreCase = true)) &&
                     it.name.endsWith(".apk", ignoreCase = true) &&
-                    it.length() > 5_000_000 &&
-                    isValidApkFile(it)
+                    isValidApkFile(it, context)
                 }?.sortedByDescending { it.lastModified() }
                 if (!candidates.isNullOrEmpty()) {
                     return candidates.first()
@@ -223,147 +257,222 @@ object ApkInstallerUtils {
     }
 
     /**
-     * Downloads the latest APK file directly with smooth, throttled progress callback,
-     * then triggers native installation.
+     * Downloads the latest APK file directly with resumable HTTP range support,
+     * automatic retries for flaky connections, smooth progress callback,
+     * and native installation.
      */
     suspend fun downloadAndInstallApk(
         context: Context,
         downloadUrl: String,
+        fallbackUrl: String = "",
         onProgress: (Float) -> Unit,
         onStatusMessage: (String) -> Unit,
         onError: (String) -> Unit,
         onSuccess: () -> Unit
     ) {
         withContext(Dispatchers.IO) {
-            try {
-                if (downloadUrl.isBlank()) {
-                    withContext(Dispatchers.Main) {
-                        onError("Download URL is empty. Please contact the administrator.")
-                    }
-                    return@withContext
-                }
+            val urlsToTry = mutableListOf<String>()
+            if (downloadUrl.isNotBlank()) urlsToTry.add(downloadUrl)
+            if (fallbackUrl.isNotBlank() && fallbackUrl != downloadUrl) urlsToTry.add(fallbackUrl)
 
-                val resolvedUrl = resolveDirectDownloadUrl(downloadUrl)
-
+            if (urlsToTry.isEmpty()) {
                 withContext(Dispatchers.Main) {
-                    onStatusMessage("Connecting to cloud download server...")
-                    onProgress(0.05f)
+                    onError("Download URL is empty. Please contact the administrator.")
                 }
+                return@withContext
+            }
 
-                val request = Request.Builder()
-                    .url(resolvedUrl)
-                    .addHeader("User-Agent", "Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36")
-                    .addHeader("Accept", "application/vnd.android.package-archive, application/octet-stream, */*")
-                    .build()
+            val downloadDir = context.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS) ?: context.filesDir
+            val partFile = File(downloadDir, "alnoor_update.apk.part")
+            val targetApkFile = File(downloadDir, "alnoor_update.apk")
 
-                val response = httpClient.newCall(request).execute()
-                if (!response.isSuccessful) {
+            for ((urlIndex, currentRawUrl) in urlsToTry.withIndex()) {
+                val resolvedUrl = resolveDirectDownloadUrl(currentRawUrl)
+                val isFallback = urlIndex > 0
+                val maxRetries = if (isFallback) 2 else 3
+
+                if (isFallback) {
                     withContext(Dispatchers.Main) {
-                        onError("Server returned error code ${response.code}. Opening direct download browser...")
-                        openInBrowser(context, downloadUrl)
+                        onStatusMessage("Primary download mirror congested. Switching to backup mirror...")
                     }
-                    return@withContext
+                    delay(1500)
                 }
 
-                val contentType = response.header("Content-Type") ?: ""
-                if (contentType.contains("text/html", ignoreCase = true)) {
-                    withContext(Dispatchers.Main) {
-                        onError("Host returned a web page instead of APK binary. Opening in web browser to download...")
-                        openInBrowser(context, downloadUrl)
-                    }
-                    return@withContext
-                }
+                var downloadSuccess = false
 
-                val body = response.body
-                if (body == null) {
-                    withContext(Dispatchers.Main) {
-                        onError("Empty response body from server. Opening download link...")
-                        openInBrowser(context, downloadUrl)
-                    }
-                    return@withContext
-                }
+                for (attempt in 1..maxRetries) {
+                    var outputStream: FileOutputStream? = null
+                    var inputStream: java.io.InputStream? = null
+                    var response: okhttp3.Response? = null
 
-                val contentLength = body.contentLength()
-                // Use standard external files Downloads dir so PackageInstaller has full read access
-                val downloadDir = context.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS) ?: context.filesDir
-                val apkFile = File(downloadDir, "alnoor_update.apk")
-                if (apkFile.exists()) {
-                    apkFile.delete()
-                }
+                    try {
+                        val existingBytes = if (partFile.exists()) partFile.length() else 0L
 
-                withContext(Dispatchers.Main) {
-                    onStatusMessage("Downloading APK update file...")
-                }
-
-                val inputStream = body.byteStream()
-                val outputStream = FileOutputStream(apkFile)
-                // 64 KB buffer for high streaming performance
-                val buffer = ByteArray(64 * 1024)
-                var bytesRead: Int
-                var totalBytesRead: Long = 0
-                var lastUiUpdateTime = 0L
-                var lastUiProgress = 0f
-
-                while (inputStream.read(buffer).also { bytesRead = it } != -1) {
-                    outputStream.write(buffer, 0, bytesRead)
-                    totalBytesRead += bytesRead
-
-                    val now = System.currentTimeMillis()
-                    val progress = if (contentLength > 0) {
-                        (totalBytesRead.toFloat() / contentLength.toFloat()).coerceIn(0.05f, 0.99f)
-                    } else {
-                        0.5f
-                    }
-
-                    // Throttle UI updates to once every 150ms or on 2% change to prevent thread lockup
-                    if (now - lastUiUpdateTime > 150 || progress - lastUiProgress >= 0.02f) {
-                        lastUiUpdateTime = now
-                        lastUiProgress = progress
-                        val mbDownloaded = totalBytesRead / (1024 * 1024f)
-                        val msg = if (contentLength > 0) {
-                            val mbTotal = contentLength / (1024 * 1024f)
-                            val pct = (progress * 100).toInt()
-                            String.format("Downloading: %.1f MB / %.1f MB (%d%%)", mbDownloaded, mbTotal, pct)
-                        } else {
-                            String.format("Downloading: %.1f MB downloaded...", mbDownloaded)
-                        }
                         withContext(Dispatchers.Main) {
-                            onProgress(progress)
-                            onStatusMessage(msg)
+                            val mirrorLabel = if (isFallback) " (Backup mirror)" else ""
+                            if (existingBytes > 0) {
+                                val mb = existingBytes / (1024 * 1024f)
+                                onStatusMessage("Resuming download from ${String.format("%.1f MB", mb)}$mirrorLabel (Attempt $attempt/$maxRetries)...")
+                            } else {
+                                onStatusMessage("Connecting to cloud download server$mirrorLabel (Attempt $attempt/$maxRetries)...")
+                                onProgress(0.05f)
+                            }
+                        }
+
+                        val requestBuilder = Request.Builder()
+                            .url(resolvedUrl)
+                            .addHeader("User-Agent", "Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36")
+                            .addHeader("Accept", "application/vnd.android.package-archive, application/octet-stream, */*")
+
+                        if (existingBytes > 0) {
+                            requestBuilder.addHeader("Range", "bytes=$existingBytes-")
+                        }
+
+                        response = httpClient.newCall(requestBuilder.build()).execute()
+
+                        // If HTTP 416 (Range Not Satisfiable), previous partial file is invalid; reset and retry fresh
+                        if (response.code == 416) {
+                            response.close()
+                            partFile.delete()
+                            continue
+                        }
+
+                        if (!response.isSuccessful && response.code != 206) {
+                            response.close()
+                            if (attempt == maxRetries) {
+                                break // Exit retry loop for this URL and try fallback if available
+                            }
+                            delay(2000)
+                            continue
+                        }
+
+                        val contentType = response.header("Content-Type") ?: ""
+                        if (contentType.contains("text/html", ignoreCase = true)) {
+                            response.close()
+                            if (urlIndex == urlsToTry.lastIndex) {
+                                withContext(Dispatchers.Main) {
+                                    onError("Server returned a web page instead of APK binary. Opening in web browser to download...")
+                                    openInBrowser(context, currentRawUrl)
+                                }
+                                return@withContext
+                            }
+                            break
+                        }
+
+                        val body = response.body
+                        if (body == null) {
+                            response.close()
+                            if (attempt == maxRetries) break
+                            delay(2000)
+                            continue
+                        }
+
+                        val isPartial = (response.code == 206)
+                        val appendToFile = isPartial && existingBytes > 0
+
+                        val totalContentLength: Long = if (isPartial) {
+                            val contentRange = response.header("Content-Range")
+                            val rangeTotal = contentRange?.substringAfterLast('/', "")?.toLongOrNull()
+                            rangeTotal ?: (existingBytes + body.contentLength())
+                        } else {
+                            body.contentLength()
+                        }
+
+                        outputStream = FileOutputStream(partFile, appendToFile)
+                        inputStream = body.byteStream()
+
+                        val buffer = ByteArray(64 * 1024)
+                        var bytesRead: Int
+                        var currentTotalBytes = if (appendToFile) existingBytes else 0L
+                        var lastUiUpdateTime = 0L
+                        var lastUiProgress = 0f
+
+                        while (inputStream.read(buffer).also { bytesRead = it } != -1) {
+                            outputStream.write(buffer, 0, bytesRead)
+                            currentTotalBytes += bytesRead
+
+                            val now = System.currentTimeMillis()
+                            val progress = if (totalContentLength > 0) {
+                                (currentTotalBytes.toFloat() / totalContentLength.toFloat()).coerceIn(0.05f, 0.99f)
+                            } else {
+                                0.5f
+                            }
+
+                            if (now - lastUiUpdateTime > 150 || progress - lastUiProgress >= 0.02f) {
+                                lastUiUpdateTime = now
+                                lastUiProgress = progress
+                                val mbDownloaded = currentTotalBytes / (1024 * 1024f)
+                                val msg = if (totalContentLength > 0) {
+                                    val mbTotal = totalContentLength / (1024 * 1024f)
+                                    val pct = (progress * 100).toInt()
+                                    String.format("Downloading: %.1f MB / %.1f MB (%d%%)", mbDownloaded, mbTotal, pct)
+                                } else {
+                                    String.format("Downloading: %.1f MB downloaded...", mbDownloaded)
+                                }
+                                withContext(Dispatchers.Main) {
+                                    onProgress(progress)
+                                    onStatusMessage(msg)
+                                }
+                            }
+                        }
+
+                        outputStream.flush()
+                        outputStream.close()
+                        outputStream = null
+                        inputStream.close()
+                        inputStream = null
+                        response.close()
+                        response = null
+
+                        if (targetApkFile.exists()) {
+                            targetApkFile.delete()
+                        }
+                        val renameSuccess = partFile.renameTo(targetApkFile)
+                        val finalApk = if (renameSuccess) targetApkFile else partFile
+
+                        finalApk.setReadable(true, false)
+
+                        val isValid = isValidApkFile(finalApk, context)
+                        if (!isValid) {
+                            Log.w(TAG, "Completed file failed APK verification. File size: ${finalApk.length()}")
+                            finalApk.delete()
+                            if (attempt == maxRetries) break
+                            delay(2000)
+                            continue
+                        }
+
+                        downloadSuccess = true
+                        withContext(Dispatchers.Main) {
+                            onProgress(1.0f)
+                            onStatusMessage("Download complete! Launching package installer...")
+                            onSuccess()
+                            installApk(context, finalApk)
+                        }
+                        return@withContext
+
+                    } catch (e: Exception) {
+                        Log.w(TAG, "Download attempt $attempt on $resolvedUrl encountered: ${e.message}", e)
+                        try { outputStream?.flush(); outputStream?.close() } catch (_: Exception) {}
+                        try { inputStream?.close() } catch (_: Exception) {}
+                        try { response?.close() } catch (_: Exception) {}
+
+                        val savedMb = if (partFile.exists()) partFile.length() / (1024 * 1024f) else 0f
+                        if (attempt < maxRetries) {
+                            withContext(Dispatchers.Main) {
+                                onStatusMessage("Connection stalled (${String.format("%.1f MB", savedMb)} saved). Resuming update...")
+                            }
+                            delay(2500)
+                        } else if (urlIndex == urlsToTry.lastIndex) {
+                            withContext(Dispatchers.Main) {
+                                val reason = if (e is java.net.SocketTimeoutException) {
+                                    "Connection timed out due to slow network"
+                                } else {
+                                    e.localizedMessage ?: "Network error"
+                                }
+                                onError("Download issue: $reason. ${String.format("%.1f MB", savedMb)} saved. Tap 'Download & Install' to resume, or choose Notification Bar/Browser below.")
+                            }
                         }
                     }
-                }
-
-                outputStream.flush()
-                outputStream.close()
-                inputStream.close()
-
-                // Allow OS and PackageInstaller to read the file
-                apkFile.setReadable(true, false)
-
-                // Verify file integrity: All valid APKs are ZIP files starting with magic bytes PK (0x50, 0x4B)
-                val isValidApk = isValidApkFile(apkFile)
-
-                if (!isValidApk) {
-                    apkFile.delete()
-                    withContext(Dispatchers.Main) {
-                        onError("Downloaded file is incomplete or corrupted. Please try System Download Manager or Browser link.")
-                        openInBrowser(context, downloadUrl)
-                    }
-                    return@withContext
-                }
-
-                withContext(Dispatchers.Main) {
-                    onProgress(1.0f)
-                    onStatusMessage("Download complete! Launching package installer...")
-                    onSuccess()
-                    installApk(context, apkFile)
-                }
-            } catch (e: Exception) {
-                Log.e(TAG, "Error downloading APK: ${e.message}", e)
-                withContext(Dispatchers.Main) {
-                    onError("Download issue: ${e.localizedMessage ?: "Unknown error"}. Opening download browser link...")
-                    openInBrowser(context, downloadUrl)
                 }
             }
         }
@@ -379,7 +488,7 @@ object ApkInstallerUtils {
                 return false
             }
 
-            if (!isValidApkFile(apkFile)) {
+            if (!isValidApkFile(apkFile, context)) {
                 Toast.makeText(context, "APK file is incomplete or corrupted", Toast.LENGTH_LONG).show()
                 return false
             }
