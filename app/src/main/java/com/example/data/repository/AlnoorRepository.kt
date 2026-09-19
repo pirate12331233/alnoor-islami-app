@@ -2578,7 +2578,7 @@ class AlnoorRepository private constructor(private val context: Context) {
             cardKey = "ALNOOR_CHANNEL",
             defaultTitle = "Alnoor Islami Channel",
             customTitle = "",
-            defaultSubtitle = "Official YouTube channel, recorded Bayanat, and live Islamic broadcasts",
+            defaultSubtitle = "Official YouTube Channel, recorded Mahafil archive.",
             customSubtitle = "",
             isVisibleToMembers = true,
             orderIndex = 0

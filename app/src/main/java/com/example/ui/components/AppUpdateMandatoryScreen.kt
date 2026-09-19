@@ -14,6 +14,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -30,9 +31,12 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AdminPanelSettings
+import androidx.compose.material.icons.filled.ArrowForward
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.CloudDownload
 import androidx.compose.material.icons.filled.Download
+import androidx.compose.material.icons.filled.ExpandLess
+import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.FolderOpen
 import androidx.compose.material.icons.filled.HelpOutline
 import androidx.compose.material.icons.filled.Info
@@ -62,6 +66,7 @@ import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -95,7 +100,10 @@ import com.example.ui.theme.Gold400
 import com.example.ui.theme.Gold500
 import com.example.ui.theme.UrgentRed
 import com.example.util.ApkInstallerUtils
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 /**
  * Full-screen non-dismissible Mandatory Update Screen.
@@ -117,12 +125,23 @@ fun AppUpdateMandatoryScreen(
     var downloadProgress by remember { mutableFloatStateOf(0f) }
     var statusMessage by remember { mutableStateOf("") }
     var errorMessage by remember { mutableStateOf<String?>(null) }
+    var downloadJob by remember { mutableStateOf<Job?>(null) }
 
     // Download & Install state
     var existingApkFile by remember { mutableStateOf(ApkInstallerUtils.findExistingDownloadedApk(context)) }
     var showBrowserGuideDialog by remember { mutableStateOf(false) }
     var showPermissionNoticeDialog by remember { mutableStateOf(false) }
     var hasInstallPermission by remember { mutableStateOf(ApkInstallerUtils.canInstallUnknownApps(context)) }
+    var showAlternativeOptions by remember { mutableStateOf(false) }
+
+    // Silently check and delete any previously downloaded Alnoor APK files on device storage
+    LaunchedEffect(Unit) {
+        withContext(Dispatchers.IO) {
+            ApkInstallerUtils.cleanupAllOldDownloadedApks(context)
+        }
+        // Refresh existing valid APK check (will be null or only verified valid)
+        existingApkFile = ApkInstallerUtils.findExistingDownloadedApk(context)
+    }
 
     // Admin Emergency Unlock state
     var showAdminAuthDialog by remember { mutableStateOf(false) }
@@ -264,48 +283,59 @@ fun AppUpdateMandatoryScreen(
 
             Spacer(modifier = Modifier.height(20.dp))
 
-            // Version Comparison Card
+            // Version Comparison Card (Modern Streamlined Pill)
             Card(
                 shape = RoundedCornerShape(16.dp),
-                colors = CardDefaults.cardColors(containerColor = Color.White.copy(alpha = 0.1f)),
+                colors = CardDefaults.cardColors(containerColor = Color.White.copy(alpha = 0.08f)),
+                border = BorderStroke(1.dp, Color.White.copy(alpha = 0.12f)),
                 elevation = CardDefaults.cardElevation(0.dp),
                 modifier = Modifier.fillMaxWidth()
             ) {
-                Column(modifier = Modifier.padding(16.dp)) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 14.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
                         Column {
                             Text(
-                                text = "Installed Version",
-                                style = MaterialTheme.typography.labelSmall,
-                                color = Color.White.copy(alpha = 0.6f)
+                                text = "CURRENT",
+                                fontSize = 10.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                color = Color.White.copy(alpha = 0.5f),
+                                letterSpacing = 0.5.sp
                             )
                             Text(
-                                text = "v$currentVersionName (Build $currentVersionCode)",
+                                text = "v$currentVersionName",
                                 style = MaterialTheme.typography.titleMedium,
                                 fontWeight = FontWeight.Bold,
-                                color = UrgentRed
+                                color = Color.White.copy(alpha = 0.85f)
                             )
                         }
 
+                        Spacer(modifier = Modifier.width(12.dp))
+
                         Icon(
-                            imageVector = Icons.Default.CloudDownload,
-                            contentDescription = "Arrow",
+                            imageVector = Icons.Default.ArrowForward,
+                            contentDescription = null,
                             tint = Gold400,
-                            modifier = Modifier.size(24.dp)
+                            modifier = Modifier.size(18.dp)
                         )
 
-                        Column(horizontalAlignment = Alignment.End) {
+                        Spacer(modifier = Modifier.width(12.dp))
+
+                        Column {
                             Text(
-                                text = "Latest Cloud Version",
-                                style = MaterialTheme.typography.labelSmall,
-                                color = Color.White.copy(alpha = 0.6f)
+                                text = "LATEST",
+                                fontSize = 10.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                color = Gold400,
+                                letterSpacing = 0.5.sp
                             )
                             Text(
-                                text = "v${versionInfo.latestVersionName} (Build ${versionInfo.latestVersionCode})",
+                                text = "v${versionInfo.latestVersionName}",
                                 style = MaterialTheme.typography.titleMedium,
                                 fontWeight = FontWeight.Bold,
                                 color = Gold300
@@ -313,37 +343,30 @@ fun AppUpdateMandatoryScreen(
                         }
                     }
 
-                    if (versionInfo.apkSizeMb.isNotBlank()) {
-                        HorizontalDivider(
-                            modifier = Modifier.padding(vertical = 12.dp),
-                            color = Color.White.copy(alpha = 0.1f)
+                    val packageSize = versionInfo.apkSizeMb.ifBlank { "19.0 MB" }
+                    Surface(
+                        shape = RoundedCornerShape(8.dp),
+                        color = Gold500.copy(alpha = 0.15f),
+                        border = BorderStroke(1.dp, Gold400.copy(alpha = 0.4f))
+                    ) {
+                        Text(
+                            text = packageSize,
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = Gold300,
+                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
                         )
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween
-                        ) {
-                            Text(
-                                text = "Download Package Size:",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = Color.White.copy(alpha = 0.7f)
-                            )
-                            Text(
-                                text = versionInfo.apkSizeMb,
-                                style = MaterialTheme.typography.bodySmall,
-                                fontWeight = FontWeight.Bold,
-                                color = Gold400
-                            )
-                        }
                     }
                 }
             }
 
-            Spacer(modifier = Modifier.height(16.dp))
+            Spacer(modifier = Modifier.height(14.dp))
 
             // What's New / Release Notes Box
             Card(
                 shape = RoundedCornerShape(16.dp),
-                colors = CardDefaults.cardColors(containerColor = Color.White.copy(alpha = 0.08f)),
+                colors = CardDefaults.cardColors(containerColor = Color.White.copy(alpha = 0.06f)),
+                border = BorderStroke(1.dp, Color.White.copy(alpha = 0.08f)),
                 elevation = CardDefaults.cardElevation(0.dp),
                 modifier = Modifier.fillMaxWidth()
             ) {
@@ -351,11 +374,11 @@ fun AppUpdateMandatoryScreen(
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Icon(
                             imageVector = Icons.Default.Info,
-                            contentDescription = "Changelog",
+                            contentDescription = null,
                             tint = Gold400,
                             modifier = Modifier.size(16.dp)
                         )
-                        Spacer(modifier = Modifier.width(6.dp))
+                        Spacer(modifier = Modifier.width(8.dp))
                         Text(
                             text = "What's in this update:",
                             style = MaterialTheme.typography.titleSmall,
@@ -367,7 +390,7 @@ fun AppUpdateMandatoryScreen(
                     Spacer(modifier = Modifier.height(8.dp))
 
                     Text(
-                        text = versionInfo.releaseNotes,
+                        text = versionInfo.releaseNotes.ifBlank { "• Important performance and stability updates\n• Real-time cloud sync improvements" },
                         style = MaterialTheme.typography.bodyMedium,
                         color = Color.White.copy(alpha = 0.85f),
                         lineHeight = 20.sp
@@ -375,78 +398,9 @@ fun AppUpdateMandatoryScreen(
                 }
             }
 
-            Spacer(modifier = Modifier.height(20.dp))
+            Spacer(modifier = Modifier.height(16.dp))
 
-            // 1. Detected Existing APK in Storage (Instant Install)
-            existingApkFile?.let { apkFile ->
-                Card(
-                    shape = RoundedCornerShape(14.dp),
-                    colors = CardDefaults.cardColors(containerColor = Gold500.copy(alpha = 0.15f)),
-                    border = BorderStroke(1.dp, Gold400),
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(bottom = 14.dp)
-                ) {
-                    Column(modifier = Modifier.padding(14.dp)) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(
-                                imageVector = Icons.Default.CheckCircle,
-                                contentDescription = null,
-                                tint = Gold400,
-                                modifier = Modifier.size(20.dp)
-                            )
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text(
-                                text = "Downloaded APK Found (${String.format("%.1f MB", apkFile.length() / (1024 * 1024f))})",
-                                fontWeight = FontWeight.Bold,
-                                color = Color.White,
-                                fontSize = 14.sp
-                            )
-                        }
-                        Spacer(modifier = Modifier.height(4.dp))
-                        Text(
-                            text = "An update package (${apkFile.name}) is already present on your phone. You can install it directly without re-downloading!",
-                            color = Color.White.copy(alpha = 0.85f),
-                            fontSize = 12.sp,
-                            lineHeight = 16.sp
-                        )
-                        Spacer(modifier = Modifier.height(10.dp))
-                        Button(
-                            onClick = {
-                                val success = ApkInstallerUtils.installApk(context, apkFile) {
-                                    showPermissionNoticeDialog = true
-                                }
-                                if (!success && !ApkInstallerUtils.canInstallUnknownApps(context)) {
-                                    showPermissionNoticeDialog = true
-                                }
-                            },
-                            colors = ButtonDefaults.buttonColors(
-                                containerColor = Gold500,
-                                contentColor = Color.Black
-                            ),
-                            shape = RoundedCornerShape(10.dp),
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(44.dp)
-                                .testTag("install_detected_apk_button")
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.SystemUpdate,
-                                contentDescription = null,
-                                modifier = Modifier.size(18.dp)
-                            )
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text(
-                                text = "Install Detected File Now",
-                                fontWeight = FontWeight.Bold,
-                                fontSize = 13.sp
-                            )
-                        }
-                    }
-                }
-            }
-
-            // 2. Android 8.0+ Unknown Apps Permission Warning Ribbon
+            // Install Permission Warning Ribbon (Only when needed)
             if (!hasInstallPermission) {
                 Surface(
                     shape = RoundedCornerShape(12.dp),
@@ -454,7 +408,7 @@ fun AppUpdateMandatoryScreen(
                     border = BorderStroke(1.dp, Gold400.copy(alpha = 0.5f)),
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(bottom = 12.dp)
+                        .padding(bottom = 14.dp)
                 ) {
                     Row(
                         modifier = Modifier.padding(12.dp),
@@ -475,7 +429,7 @@ fun AppUpdateMandatoryScreen(
                                 fontSize = 12.sp
                             )
                             Text(
-                                text = "Allow 'Install unknown apps' for Alnoor App so updates can install automatically.",
+                                text = "Allow 'Install unknown apps' so updates can install automatically.",
                                 color = Color.White.copy(alpha = 0.8f),
                                 fontSize = 11.sp,
                                 lineHeight = 15.sp
@@ -498,16 +452,19 @@ fun AppUpdateMandatoryScreen(
                 }
             }
 
-            // 3. Download Progress Section
+            // =======================================================================
+            // OPTION 1: MODERN SINGLE-ACTION UPDATE FLOW (Play Store / WhatsApp style)
+            // =======================================================================
             if (isDownloading) {
+                // State A: Active Download Progress Card
                 Card(
-                    shape = RoundedCornerShape(14.dp),
-                    colors = CardDefaults.cardColors(containerColor = Color.White.copy(alpha = 0.15f)),
+                    shape = RoundedCornerShape(16.dp),
+                    colors = CardDefaults.cardColors(containerColor = Color.White.copy(alpha = 0.12f)),
+                    border = BorderStroke(1.dp, Gold400.copy(alpha = 0.3f)),
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Column(
                         modifier = Modifier.padding(16.dp),
-                        horizontalAlignment = Alignment.CenterHorizontally,
                         verticalArrangement = Arrangement.spacedBy(10.dp)
                     ) {
                         Row(
@@ -515,17 +472,25 @@ fun AppUpdateMandatoryScreen(
                             horizontalArrangement = Arrangement.SpaceBetween,
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Text(
-                                text = statusMessage.ifBlank { "Downloading update..." },
-                                style = MaterialTheme.typography.bodySmall,
-                                color = Color.White,
-                                fontWeight = FontWeight.Medium
-                            )
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                CircularProgressIndicator(
+                                    modifier = Modifier.size(16.dp),
+                                    color = Gold400,
+                                    strokeWidth = 2.dp
+                                )
+                                Spacer(modifier = Modifier.width(10.dp))
+                                Text(
+                                    text = "Downloading update...",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = Color.White
+                                )
+                            }
                             Text(
                                 text = "${(downloadProgress * 100).toInt()}%",
-                                style = MaterialTheme.typography.bodySmall,
+                                style = MaterialTheme.typography.bodyMedium,
                                 fontWeight = FontWeight.Bold,
-                                color = Gold400
+                                color = Gold300
                             )
                         }
 
@@ -538,210 +503,384 @@ fun AppUpdateMandatoryScreen(
                             color = Gold400,
                             trackColor = Color.White.copy(alpha = 0.2f),
                         )
-                    }
-                }
-                Spacer(modifier = Modifier.height(16.dp))
-            }
 
-            // Error message if any
-            errorMessage?.let { err ->
-                Surface(
-                    shape = RoundedCornerShape(10.dp),
-                    color = UrgentRed.copy(alpha = 0.2f),
-                    modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp)
-                ) {
-                    Text(
-                        text = err,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = Color.White,
-                        modifier = Modifier.padding(12.dp),
-                        textAlign = TextAlign.Center
-                    )
-                }
-            }
-
-            // Action Buttons
-            // Button A: In-App Fast Direct Download & Install
-            Button(
-                onClick = {
-                    if (!isDownloading) {
-                        isDownloading = true
-                        errorMessage = null
-                        coroutineScope.launch {
-                            ApkInstallerUtils.downloadAndInstallApk(
-                                context = context,
-                                downloadUrl = versionInfo.apkDownloadUrl,
-                                fallbackUrl = versionInfo.fallbackApkDownloadUrl,
-                                onProgress = { progress ->
-                                    downloadProgress = progress
-                                },
-                                onStatusMessage = { msg ->
-                                    statusMessage = msg
-                                },
-                                onError = { err ->
-                                    isDownloading = false
-                                    errorMessage = err
-                                },
-                                onSuccess = {
-                                    isDownloading = false
-                                    // Refresh existing APK detection
-                                    existingApkFile = ApkInstallerUtils.findExistingDownloadedApk(context)
-                                }
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = statusMessage.ifBlank { "Please keep the app open..." },
+                                style = MaterialTheme.typography.bodySmall,
+                                color = Color.White.copy(alpha = 0.7f),
+                                maxLines = 1,
+                                modifier = Modifier.weight(1f, fill = false)
                             )
+                            TextButton(
+                                onClick = {
+                                    downloadJob?.cancel()
+                                    downloadJob = null
+                                    isDownloading = false
+                                    statusMessage = ""
+                                    downloadProgress = 0f
+                                },
+                                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp)
+                            ) {
+                                Text(
+                                    text = "Cancel",
+                                    color = UrgentRed,
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 12.sp
+                                )
+                            }
                         }
                     }
-                },
-                enabled = !isDownloading,
-                shape = RoundedCornerShape(12.dp),
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = Gold500,
-                    contentColor = Color.Black
-                ),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(52.dp)
-                    .testTag("download_and_install_update_button")
-            ) {
-                if (isDownloading) {
-                    CircularProgressIndicator(
-                        modifier = Modifier.size(20.dp),
-                        color = Color.Black,
-                        strokeWidth = 2.5.dp
-                    )
-                    Spacer(modifier = Modifier.width(10.dp))
-                    Text("Downloading & Preparing APK...", fontWeight = FontWeight.Bold)
-                } else {
+                }
+            } else if (errorMessage != null) {
+                // State B: Friendly Error / Interrupted Banner
+                Card(
+                    shape = RoundedCornerShape(14.dp),
+                    colors = CardDefaults.cardColors(containerColor = UrgentRed.copy(alpha = 0.18f)),
+                    border = BorderStroke(1.dp, UrgentRed.copy(alpha = 0.5f)),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Column(modifier = Modifier.padding(14.dp)) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(
+                                imageVector = Icons.Default.Warning,
+                                contentDescription = null,
+                                tint = UrgentRed,
+                                modifier = Modifier.size(18.dp)
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                text = "Update Interrupted",
+                                fontWeight = FontWeight.Bold,
+                                color = Color.White,
+                                fontSize = 13.sp
+                            )
+                        }
+                        Spacer(modifier = Modifier.height(6.dp))
+                        Text(
+                            text = errorMessage ?: "Connection was interrupted.",
+                            color = Color.White.copy(alpha = 0.85f),
+                            fontSize = 12.sp,
+                            lineHeight = 16.sp
+                        )
+                        Spacer(modifier = Modifier.height(12.dp))
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(10.dp)
+                        ) {
+                            Button(
+                                onClick = {
+                                    errorMessage = null
+                                    isDownloading = true
+                                    downloadJob = coroutineScope.launch {
+                                        ApkInstallerUtils.downloadAndInstallApk(
+                                            context = context,
+                                            downloadUrl = versionInfo.apkDownloadUrl,
+                                            fallbackUrl = versionInfo.fallbackApkDownloadUrl,
+                                            onProgress = { progress -> downloadProgress = progress },
+                                            onStatusMessage = { msg -> statusMessage = msg },
+                                            onError = { err ->
+                                                isDownloading = false
+                                                errorMessage = err
+                                            },
+                                            onSuccess = {
+                                                isDownloading = false
+                                                existingApkFile = ApkInstallerUtils.findExistingDownloadedApk(context)
+                                            }
+                                        )
+                                    }
+                                },
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = Gold500,
+                                    contentColor = Color.Black
+                                ),
+                                shape = RoundedCornerShape(10.dp),
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .height(44.dp)
+                            ) {
+                                Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(16.dp))
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text("Retry", fontWeight = FontWeight.Bold)
+                            }
+
+                            OutlinedButton(
+                                onClick = { showBrowserGuideDialog = true },
+                                shape = RoundedCornerShape(10.dp),
+                                border = BorderStroke(1.dp, Color.White.copy(alpha = 0.5f)),
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .height(44.dp)
+                            ) {
+                                Icon(Icons.Default.OpenInBrowser, contentDescription = null, tint = Color.White, modifier = Modifier.size(16.dp))
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text("Browser", color = Color.White, fontWeight = FontWeight.Bold)
+                            }
+                        }
+                    }
+                }
+            } else if (existingApkFile != null && ApkInstallerUtils.isValidApkFile(existingApkFile!!, context)) {
+                // State C: Fully verified downloaded APK ready to install
+                val apkFile = existingApkFile!!
+                Column(modifier = Modifier.fillMaxWidth()) {
+                    Button(
+                        onClick = {
+                            val success = ApkInstallerUtils.installApk(context, apkFile) {
+                                showPermissionNoticeDialog = true
+                            }
+                            if (!success && !ApkInstallerUtils.canInstallUnknownApps(context)) {
+                                showPermissionNoticeDialog = true
+                            }
+                        },
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = Gold500,
+                            contentColor = Color.Black
+                        ),
+                        shape = RoundedCornerShape(14.dp),
+                        elevation = ButtonDefaults.buttonElevation(defaultElevation = 6.dp),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(54.dp)
+                            .testTag("install_detected_apk_button")
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.SystemUpdate,
+                            contentDescription = null,
+                            modifier = Modifier.size(20.dp)
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            text = "Install Update Now",
+                            fontSize = 15.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+
+                    TextButton(
+                        onClick = {
+                            existingApkFile?.delete()
+                            existingApkFile = null
+                            // Trigger clean re-download
+                            isDownloading = true
+                            downloadJob = coroutineScope.launch {
+                                ApkInstallerUtils.downloadAndInstallApk(
+                                    context = context,
+                                    downloadUrl = versionInfo.apkDownloadUrl,
+                                    fallbackUrl = versionInfo.fallbackApkDownloadUrl,
+                                    onProgress = { progress -> downloadProgress = progress },
+                                    onStatusMessage = { msg -> statusMessage = msg },
+                                    onError = { err ->
+                                        isDownloading = false
+                                        errorMessage = err
+                                    },
+                                    onSuccess = {
+                                        isDownloading = false
+                                        existingApkFile = ApkInstallerUtils.findExistingDownloadedApk(context)
+                                    }
+                                )
+                            }
+                        },
+                        modifier = Modifier
+                            .align(Alignment.CenterHorizontally)
+                            .padding(top = 4.dp)
+                    ) {
+                        Text(
+                            text = "Re-download fresh update",
+                            color = Gold400,
+                            fontSize = 12.sp
+                        )
+                    }
+                }
+            } else {
+                // State D: Single Primary Action Button: Update Now (Default)
+                val sizeLabel = versionInfo.apkSizeMb.ifBlank { "19.0 MB" }
+                Button(
+                    onClick = {
+                        if (!isDownloading) {
+                            isDownloading = true
+                            errorMessage = null
+                            downloadJob = coroutineScope.launch {
+                                ApkInstallerUtils.downloadAndInstallApk(
+                                    context = context,
+                                    downloadUrl = versionInfo.apkDownloadUrl,
+                                    fallbackUrl = versionInfo.fallbackApkDownloadUrl,
+                                    onProgress = { progress ->
+                                        downloadProgress = progress
+                                    },
+                                    onStatusMessage = { msg ->
+                                        statusMessage = msg
+                                    },
+                                    onError = { err ->
+                                        isDownloading = false
+                                        errorMessage = err
+                                    },
+                                    onSuccess = {
+                                        isDownloading = false
+                                        existingApkFile = ApkInstallerUtils.findExistingDownloadedApk(context)
+                                    }
+                                )
+                            }
+                        }
+                    },
+                    shape = RoundedCornerShape(14.dp),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = Gold500,
+                        contentColor = Color.Black
+                    ),
+                    elevation = ButtonDefaults.buttonElevation(defaultElevation = 6.dp),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(54.dp)
+                        .testTag("download_and_install_update_button")
+                ) {
                     Icon(
                         imageVector = Icons.Default.Download,
-                        contentDescription = "Install",
+                        contentDescription = "Update",
                         modifier = Modifier.size(20.dp)
                     )
-                    Spacer(modifier = Modifier.width(8.dp))
+                    Spacer(modifier = Modifier.width(10.dp))
                     Text(
-                        text = if (downloadProgress > 0.05f && downloadProgress < 0.99f) "Resume & Install Update" else "Download & Install Update (Fast Direct)",
-                        fontSize = 14.sp,
+                        text = "Update Now ($sizeLabel)",
+                        fontSize = 15.sp,
                         fontWeight = FontWeight.Bold
                     )
                 }
             }
 
-            Spacer(modifier = Modifier.height(10.dp))
+            Spacer(modifier = Modifier.height(18.dp))
 
-            // Button B: Open Device Downloads / Pick Downloaded File
-            OutlinedButton(
-                onClick = {
-                    // Try to re-scan
-                    val found = ApkInstallerUtils.findExistingDownloadedApk(context)
-                    if (found != null) {
-                        existingApkFile = found
-                        ApkInstallerUtils.installApk(context, found) {
-                            showPermissionNoticeDialog = true
+            // Collapsible Troubleshooting / Alternative Download Options (Accordion)
+            Column(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                TextButton(
+                    onClick = { showAlternativeOptions = !showAlternativeOptions },
+                    modifier = Modifier.testTag("toggle_alternative_options")
+                ) {
+                    Icon(
+                        imageVector = if (showAlternativeOptions) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+                        contentDescription = null,
+                        tint = Gold300,
+                        modifier = Modifier.size(18.dp)
+                    )
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text(
+                        text = if (showAlternativeOptions) "Hide alternative options" else "Having trouble? Alternative options",
+                        color = Gold300,
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Medium
+                    )
+                }
+
+                AnimatedVisibility(visible = showAlternativeOptions) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(top = 8.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        OutlinedButton(
+                            onClick = { showBrowserGuideDialog = true },
+                            shape = RoundedCornerShape(10.dp),
+                            border = BorderStroke(1.dp, Color.White.copy(alpha = 0.3f)),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(44.dp)
+                                .testTag("download_update_browser_button")
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.OpenInBrowser,
+                                contentDescription = null,
+                                tint = Color.White,
+                                modifier = Modifier.size(16.dp)
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                text = "Download via Web Browser (Chrome / Brave)",
+                                color = Color.White,
+                                fontSize = 12.sp
+                            )
                         }
-                    } else {
-                        ApkInstallerUtils.openSystemDownloadsFolder(context)
+
+                        OutlinedButton(
+                            onClick = {
+                                ApkInstallerUtils.downloadViaSystemDownloadManager(context, versionInfo.apkDownloadUrl)
+                            },
+                            shape = RoundedCornerShape(10.dp),
+                            border = BorderStroke(1.dp, Color.White.copy(alpha = 0.3f)),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(44.dp)
+                                .testTag("download_system_dm_button")
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.CloudDownload,
+                                contentDescription = null,
+                                tint = Color.White,
+                                modifier = Modifier.size(16.dp)
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                text = "Download via Phone Notification Bar",
+                                color = Color.White,
+                                fontSize = 12.sp
+                            )
+                        }
+
+                        OutlinedButton(
+                            onClick = {
+                                ApkInstallerUtils.openSystemDownloadsFolder(context)
+                            },
+                            shape = RoundedCornerShape(10.dp),
+                            border = BorderStroke(1.dp, Color.White.copy(alpha = 0.3f)),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(44.dp)
+                                .testTag("open_downloads_apk_button")
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.FolderOpen,
+                                contentDescription = null,
+                                tint = Color.White,
+                                modifier = Modifier.size(16.dp)
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                text = "Open Device Downloads Folder",
+                                color = Color.White,
+                                fontSize = 12.sp
+                            )
+                        }
+
+                        TextButton(
+                            onClick = {
+                                onRetryCheck()
+                                Toast.makeText(context, "Checking cloud for latest release...", Toast.LENGTH_SHORT).show()
+                            },
+                            modifier = Modifier
+                                .align(Alignment.CenterHorizontally)
+                                .height(38.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Refresh,
+                                contentDescription = null,
+                                tint = Gold400,
+                                modifier = Modifier.size(15.dp)
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text(
+                                text = "Re-check Cloud Version",
+                                color = Gold400,
+                                fontSize = 12.sp
+                            )
+                        }
                     }
-                },
-                shape = RoundedCornerShape(12.dp),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(44.dp)
-                    .testTag("open_downloads_apk_button")
-            ) {
-                Icon(
-                    imageVector = Icons.Default.FolderOpen,
-                    contentDescription = "Downloads",
-                    tint = Gold300,
-                    modifier = Modifier.size(18.dp)
-                )
-                Spacer(modifier = Modifier.width(8.dp))
-                Text(
-                    text = "Open Device Downloads / Install Saved File",
-                    color = Gold300,
-                    fontSize = 13.sp
-                )
-            }
-
-            Spacer(modifier = Modifier.height(10.dp))
-
-            // Button C: Download via System DownloadManager (Notification Bar)
-            OutlinedButton(
-                onClick = {
-                    ApkInstallerUtils.downloadViaSystemDownloadManager(context, versionInfo.apkDownloadUrl)
-                },
-                shape = RoundedCornerShape(12.dp),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(44.dp)
-                    .testTag("download_system_dm_button")
-            ) {
-                Icon(
-                    imageVector = Icons.Default.CloudDownload,
-                    contentDescription = "System Download Manager",
-                    tint = Color.White,
-                    modifier = Modifier.size(18.dp)
-                )
-                Spacer(modifier = Modifier.width(8.dp))
-                Text(
-                    text = "Download via Phone Notification Bar",
-                    color = Color.White,
-                    fontSize = 13.sp
-                )
-            }
-
-            Spacer(modifier = Modifier.height(10.dp))
-
-            // Button D: Direct Browser Link (with Helpful Troubleshooting Guide)
-            OutlinedButton(
-                onClick = {
-                    showBrowserGuideDialog = true
-                },
-                shape = RoundedCornerShape(12.dp),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(44.dp)
-                    .testTag("download_update_browser_button")
-            ) {
-                Icon(
-                    imageVector = Icons.Default.OpenInBrowser,
-                    contentDescription = "Browser Link",
-                    tint = Color.White,
-                    modifier = Modifier.size(18.dp)
-                )
-                Spacer(modifier = Modifier.width(8.dp))
-                Text(
-                    text = "Download via Web Browser (Brave / Chrome)",
-                    color = Color.White,
-                    fontSize = 13.sp
-                )
-            }
-
-            Spacer(modifier = Modifier.height(8.dp))
-
-            // Refresh / Re-check button
-            OutlinedButton(
-                onClick = {
-                    existingApkFile = ApkInstallerUtils.findExistingDownloadedApk(context)
-                    hasInstallPermission = ApkInstallerUtils.canInstallUnknownApps(context)
-                    onRetryCheck()
-                    Toast.makeText(context, "Checking cloud for latest release...", Toast.LENGTH_SHORT).show()
-                },
-                shape = RoundedCornerShape(12.dp),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(42.dp)
-            ) {
-                Icon(
-                    imageVector = Icons.Default.Refresh,
-                    contentDescription = "Check Again",
-                    tint = Gold300,
-                    modifier = Modifier.size(16.dp)
-                )
-                Spacer(modifier = Modifier.width(6.dp))
-                Text(
-                    text = "Re-check Cloud Version",
-                    color = Gold300,
-                    fontSize = 12.sp
-                )
+                }
             }
 
             Spacer(modifier = Modifier.height(14.dp))

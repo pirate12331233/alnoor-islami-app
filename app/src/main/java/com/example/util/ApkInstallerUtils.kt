@@ -115,11 +115,11 @@ object ApkInstallerUtils {
     }
 
     /**
-     * Verifies that the given file exists, has a plausible update size (>= 10 MB),
+     * Verifies that the given file exists, has a plausible update size (>= 14 MB),
      * starts with ZIP magic bytes (PK), and can be parsed by Android's package archive parser.
      */
     fun isValidApkFile(file: File, context: Context? = null): Boolean {
-        if (!file.exists() || file.length() < 10_000_000L) return false // Update APK is ~19 MB, never < 10 MB
+        if (!file.exists() || file.length() < 14_000_000L) return false // Update APK is ~19 MB, never < 14 MB
         val startsWithZip = try {
             java.io.FileInputStream(file).use { fis ->
                 val magic = ByteArray(2)
@@ -147,6 +147,75 @@ object ApkInstallerUtils {
             }
         }
         return true
+    }
+
+    /**
+     * Silently and thoroughly deletes any previously downloaded or cached Alnoor APK files,
+     * partial download files (.part), and obsolete update packages across all device storage locations
+     * (app external downloads, internal cache, filesDir, externalCacheDir, and public downloads).
+     */
+    fun cleanupAllOldDownloadedApks(context: Context): Int {
+        var deletedCount = 0
+        try {
+            // 1. App external downloads directory
+            val appDownloadsDir = context.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS)
+            if (appDownloadsDir != null && appDownloadsDir.exists()) {
+                appDownloadsDir.listFiles()?.forEach { file ->
+                    val lower = file.name.lowercase()
+                    if (lower.endsWith(".apk") || lower.endsWith(".part") || lower.contains("alnoor") || lower.contains("update")) {
+                        try {
+                            if (file.delete()) {
+                                deletedCount++
+                                Log.i(TAG, "Silently deleted stale download file: ${file.name}")
+                            }
+                        } catch (e: Exception) {
+                            Log.w(TAG, "Failed to delete file: ${file.name}, error: ${e.message}")
+                        }
+                    }
+                }
+            }
+
+            // 2. App internal filesDir, cacheDir, externalCacheDir
+            listOf(context.filesDir, context.cacheDir, context.externalCacheDir).forEach { dir ->
+                if (dir != null && dir.exists()) {
+                    dir.listFiles()?.forEach { file ->
+                        val lower = file.name.lowercase()
+                        if (lower.endsWith(".apk") || lower.endsWith(".part") || lower.contains("alnoor") || lower.contains("update")) {
+                            try {
+                                if (file.delete()) {
+                                    deletedCount++
+                                    Log.i(TAG, "Silently deleted cached APK: ${file.name}")
+                                }
+                            } catch (e: Exception) {
+                                Log.w(TAG, "Failed deleting cached apk ${file.name}: ${e.message}")
+                            }
+                        }
+                    }
+                }
+            }
+
+            // 3. Public Downloads directory (clean any alnoor / app-release / alnoor_update apks)
+            val publicDownloads = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)
+            if (publicDownloads != null && publicDownloads.exists()) {
+                publicDownloads.listFiles()?.forEach { file ->
+                    val lower = file.name.lowercase()
+                    if (lower.endsWith(".apk") && (lower.contains("alnoor") || lower.contains("app-release") || lower.startsWith("alnoor_update"))) {
+                        try {
+                            if (file.delete()) {
+                                deletedCount++
+                                Log.i(TAG, "Silently deleted public download APK: ${file.name}")
+                            }
+                        } catch (e: Exception) {
+                            Log.w(TAG, "Could not delete public file ${file.name}: ${e.message}")
+                        }
+                    }
+                }
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "Error cleaning up old APK files: ${e.message}")
+        }
+        Log.i(TAG, "Cleaned up a total of $deletedCount old APK file(s)")
+        return deletedCount
     }
 
     /**

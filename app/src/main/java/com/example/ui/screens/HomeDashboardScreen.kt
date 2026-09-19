@@ -147,18 +147,6 @@ fun HomeDashboardScreen(
         return !config.isVisibleToMembers && currentRole == UserRole.ADMIN
     }
 
-    // Pulse animation for Live indicator
-    val infiniteTransition = rememberInfiniteTransition(label = "pulse")
-    val pulseAlpha by infiniteTransition.animateFloat(
-        initialValue = 0.4f,
-        targetValue = 1f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(800, easing = FastOutSlowInEasing),
-            repeatMode = RepeatMode.Reverse
-        ),
-        label = "live_pulse"
-    )
-
     // Quran progress for Quran-e-Pak action card
     val quranRepo = remember { QuranRepository.getInstance(context) }
     val quranProgress by quranRepo.readingProgress.collectAsState()
@@ -378,34 +366,6 @@ fun HomeDashboardScreen(
                                         modifier = Modifier.weight(1f, fill = false)
                                     )
 
-                                    if (hasActiveLiveStream) {
-                                        Spacer(modifier = Modifier.width(6.dp))
-                                        Surface(
-                                            shape = RoundedCornerShape(6.dp),
-                                            color = LiveRed
-                                        ) {
-                                            Row(
-                                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
-                                                verticalAlignment = Alignment.CenterVertically
-                                            ) {
-                                                Box(
-                                                    modifier = Modifier
-                                                        .size(6.dp)
-                                                        .clip(CircleShape)
-                                                        .background(Color.White)
-                                                        .alpha(pulseAlpha)
-                                                )
-                                                Spacer(modifier = Modifier.width(4.dp))
-                                                Text(
-                                                    text = "LIVE NOW",
-                                                    color = Color.White,
-                                                    fontSize = 8.5.sp,
-                                                    fontWeight = FontWeight.Bold
-                                                )
-                                            }
-                                        }
-                                    }
-
                                     if (isHidden) {
                                         Spacer(modifier = Modifier.width(6.dp))
                                         Surface(
@@ -426,9 +386,14 @@ fun HomeDashboardScreen(
 
                                 Spacer(modifier = Modifier.height(3.dp))
 
+                                val channelSubtitle = when {
+                                    channelCard != null && channelCard.customSubtitle.isNotBlank() -> channelCard.customSubtitle
+                                    channelCard != null && channelCard.defaultSubtitle.isNotBlank() && !channelCard.defaultSubtitle.contains("live Islamic broadcasts", ignoreCase = true) -> channelCard.defaultSubtitle
+                                    else -> "Official YouTube Channel, recorded Mahafil archive."
+                                }
+
                                 Text(
-                                    text = channelCard?.displaySubtitle
-                                        ?: "Official YouTube channel, recorded Bayanat & live Islamic broadcasts",
+                                    text = channelSubtitle,
                                     fontSize = 12.sp,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                                     maxLines = 2,
@@ -485,13 +450,13 @@ fun HomeDashboardScreen(
 
                                     Column(modifier = Modifier.weight(1f)) {
                                         Text(
-                                            text = "YouTube Channel",
+                                            text = "Click to YouTube Channel",
                                             fontSize = 13.5.sp,
                                             fontWeight = FontWeight.Bold,
                                             color = MaterialTheme.colorScheme.onSurface
                                         )
                                         Text(
-                                            text = "Official videos, recorded Bayanat & lectures",
+                                            text = "Alnoor Islami recorded live Mahafil Videos.",
                                             fontSize = 11.sp,
                                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                                             maxLines = 1,
@@ -560,7 +525,7 @@ fun HomeDashboardScreen(
                                     Column(modifier = Modifier.weight(1f)) {
                                         Row(verticalAlignment = Alignment.CenterVertically) {
                                             Text(
-                                                text = "Live YouTube Broadcast & Stream",
+                                                text = "Click to view Live Scheduled Mehfil",
                                                 fontSize = 13.5.sp,
                                                 fontWeight = FontWeight.Bold,
                                                 color = if (hasActiveLiveStream) Color.White else MaterialTheme.colorScheme.onSurface
