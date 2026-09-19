@@ -242,10 +242,14 @@ fun buildChatThreads(inquiries: List<AdminMessage>): List<ChatThread> {
             latest.message
         }
 
+        val isFlashThread = threadId == "FLASH_BROADCAST"
+        val threadName = if (isFlashThread) "⚡ Flash Broadcasts (All Devices)" else userMsg.senderName.ifBlank { "Community Member" }
+        val threadContact = if (isFlashThread) "Official Mosque Broadcast" else contact
+
         ChatThread(
             threadId = threadId,
-            userName = userMsg.senderName.ifBlank { "Community Member" },
-            userContact = contact,
+            userName = threadName,
+            userContact = threadContact,
             category = category,
             latestMessage = latestSnippet,
             latestTimestamp = latest.timestamp,
@@ -1281,17 +1285,18 @@ fun AdminThreadCard(
     onDelete: () -> Unit
 ) {
     val isUnread = thread.unreadCount > 0
+    val isFlashThread = thread.threadId == "FLASH_BROADCAST"
 
     Card(
         shape = RoundedCornerShape(16.dp),
         colors = CardDefaults.cardColors(
-            containerColor = if (isUnread) Color(0xFF065F46) else Color(0xFF064E3B)
+            containerColor = if (isFlashThread) Color(0xFF1E293B) else if (isUnread) Color(0xFF065F46) else Color(0xFF064E3B)
         ),
         border = androidx.compose.foundation.BorderStroke(
-            width = if (isUnread) 1.5.dp else 1.dp,
-            color = if (isUnread) Gold400 else Gold500.copy(alpha = 0.35f)
+            width = if (isFlashThread || isUnread) 1.5.dp else 1.dp,
+            color = if (isFlashThread) Color(0xFFEF4444) else if (isUnread) Gold400 else Gold500.copy(alpha = 0.35f)
         ),
-        elevation = CardDefaults.cardElevation(if (isUnread) 4.dp else 2.dp),
+        elevation = CardDefaults.cardElevation(if (isUnread || isFlashThread) 4.dp else 2.dp),
         modifier = Modifier
             .fillMaxWidth()
             .clickable { onClick() }
@@ -1300,20 +1305,29 @@ fun AdminThreadCard(
             modifier = Modifier.padding(14.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            // User Avatar Circle (Gold with Dark Emerald initial)
+            // Avatar Circle
             Box(
                 contentAlignment = Alignment.Center,
                 modifier = Modifier
                     .size(48.dp)
                     .clip(CircleShape)
-                    .background(Gold500)
+                    .background(if (isFlashThread) Color(0xFFDC2626) else Gold500)
             ) {
-                Text(
-                    text = thread.userName.take(1).uppercase().ifBlank { "U" },
-                    fontSize = 20.sp,
-                    fontWeight = FontWeight.Black,
-                    color = Color(0xFF064E3B)
-                )
+                if (isFlashThread) {
+                    Icon(
+                        Icons.Default.NotificationsActive,
+                        contentDescription = null,
+                        tint = Color.White,
+                        modifier = Modifier.size(26.dp)
+                    )
+                } else {
+                    Text(
+                        text = thread.userName.take(1).uppercase().ifBlank { "U" },
+                        fontSize = 20.sp,
+                        fontWeight = FontWeight.Black,
+                        color = Color(0xFF064E3B)
+                    )
+                }
             }
 
             Spacer(modifier = Modifier.width(12.dp))

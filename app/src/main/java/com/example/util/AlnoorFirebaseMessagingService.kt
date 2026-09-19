@@ -60,6 +60,7 @@ class AlnoorFirebaseMessagingService : FirebaseMessagingService() {
                 timestamp = timestamp,
                 alertId = alertId
             )
+            AlnoorBackgroundSyncReceiver.markAlertShown(applicationContext, alertId)
 
             CoroutineScope(Dispatchers.IO).launch {
                 try {
