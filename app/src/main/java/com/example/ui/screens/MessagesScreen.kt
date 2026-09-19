@@ -5,8 +5,11 @@ import android.content.Intent
 import android.net.Uri
 import android.widget.Toast
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -46,10 +49,12 @@ import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Mail
 import androidx.compose.material.icons.filled.Mosque
+import androidx.compose.material.icons.filled.NotificationsActive
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Phone
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Shield
+import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Badge
 import androidx.compose.material3.BadgedBox
@@ -138,7 +143,8 @@ data class ChatBubbleItem(
     val senderContact: String,
     val isRead: Boolean,
     val category: MessageCategory = MessageCategory.GENERAL,
-    val originalInquiryId: String = ""
+    val originalInquiryId: String = "",
+    val isFlash: Boolean = false
 )
 
 /**
@@ -150,6 +156,7 @@ fun buildChatBubbles(messages: List<AdminMessage>): List<ChatBubbleItem> {
     val sorted = messages.sortedBy { it.createdAt }
 
     for (msg in sorted) {
+        val isFlash = msg.threadId == "FLASH_BROADCAST" || msg.subject.contains("FLASH", ignoreCase = true)
         if (msg.isFromAdmin) {
             bubbles.add(
                 ChatBubbleItem(
@@ -157,11 +164,12 @@ fun buildChatBubbles(messages: List<AdminMessage>): List<ChatBubbleItem> {
                     text = msg.message,
                     timestamp = msg.timestamp,
                     isFromAdmin = true,
-                    senderName = msg.senderName.ifBlank { "Alnoor Admin" },
+                    senderName = msg.senderName.ifBlank { if (isFlash) "Alnoor Mosque Administration" else "Alnoor Admin" },
                     senderContact = msg.senderContact,
                     isRead = true,
                     category = msg.category,
-                    originalInquiryId = msg.id
+                    originalInquiryId = msg.id,
+                    isFlash = isFlash
                 )
             )
         } else {
@@ -176,7 +184,8 @@ fun buildChatBubbles(messages: List<AdminMessage>): List<ChatBubbleItem> {
                     senderContact = msg.senderContact,
                     isRead = msg.isRead,
                     category = msg.category,
-                    originalInquiryId = msg.id
+                    originalInquiryId = msg.id,
+                    isFlash = false
                 )
             )
             // If this message has a legacy adminReply attached, render it as the reply bubble right after
@@ -191,7 +200,8 @@ fun buildChatBubbles(messages: List<AdminMessage>): List<ChatBubbleItem> {
                         senderContact = "helpline@alnoor.org",
                         isRead = true,
                         category = msg.category,
-                        originalInquiryId = msg.id
+                        originalInquiryId = msg.id,
+                        isFlash = false
                     )
                 )
             }
@@ -261,6 +271,7 @@ fun MessagesScreen(
     onSendChatMessage: (threadId: String, senderName: String, senderContact: String, text: String, isFromAdmin: Boolean, category: MessageCategory) -> Unit = { _, _, _, _, _, _ -> },
     onDeleteThread: (threadId: String, contact: String, messages: List<AdminMessage>) -> Unit = { _, _, _ -> },
     onMarkThreadRead: (threadId: String, contact: String) -> Unit = { _, _ -> },
+    onBroadcastFlashMessage: ((title: String, message: String) -> Unit)? = null,
     onNavigateToAuth: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
@@ -274,6 +285,7 @@ fun MessagesScreen(
             onDeleteInquiry = onDeleteInquiry,
             onDeleteThread = onDeleteThread,
             onMarkThreadRead = onMarkThreadRead,
+            onBroadcastFlashMessage = onBroadcastFlashMessage,
             modifier = modifier
         )
     } else {
@@ -350,7 +362,9 @@ fun UserWhatsAppChatView(
         val msgContact = msg.senderContact.trim().lowercase().filter { it.isLetterOrDigit() }
         val msgName = msg.senderName.trim().lowercase().filter { it.isLetterOrDigit() }
 
-        sentIds.contains(msg.id) ||
+        msg.threadId == "FLASH_BROADCAST" ||
+                (msg.isFromAdmin && msg.subject.contains("FLASH", ignoreCase = true)) ||
+                sentIds.contains(msg.id) ||
                 (msg.threadId.isNotBlank() && (msg.threadId == deviceThreadId || (normalizedContactKey.isNotBlank() && msg.threadId == "contact_$normalizedContactKey"))) ||
                 (normalizedContactKey.isNotBlank() && msgContact == normalizedContactKey) ||
                 (normalizedNameKey.isNotBlank() && msgName == normalizedNameKey && normalizedNameKey != "communitymember")
@@ -729,12 +743,41 @@ fun UserChatBubble(
                         bottomEnd = if (isUser) 4.dp else 16.dp
                     )
                 )
-                .background(if (isUser) Emerald800 else Color.White)
+                .background(
+                    if (bubble.isFlash) Color(0xFFFFF1F2)
+                    else if (isUser) Emerald800
+                    else Color.White
+                )
                 .clickable { onCopy() }
                 .padding(horizontal = 12.dp, vertical = 8.dp)
         ) {
             Column {
-                if (!isUser) {
+                if (bubble.isFlash) {
+                    Surface(
+                        shape = RoundedCornerShape(4.dp),
+                        color = Color(0xFFDC2626),
+                        modifier = Modifier.padding(bottom = 6.dp)
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Warning,
+                                contentDescription = null,
+                                tint = Color.White,
+                                modifier = Modifier.size(12.dp)
+                            )
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text(
+                                text = "⚡ FLASH BROADCAST",
+                                fontSize = 9.5.sp,
+                                fontWeight = FontWeight.ExtraBold,
+                                color = Color.White
+                            )
+                        }
+                    }
+                } else if (!isUser) {
                     // Admin Header
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
@@ -768,7 +811,7 @@ fun UserChatBubble(
                 Text(
                     text = bubble.text,
                     fontSize = 14.sp,
-                    color = if (isUser) Color.White else Color(0xFF1E293B),
+                    color = if (bubble.isFlash) Color(0xFF881337) else if (isUser) Color.White else Color(0xFF1E293B),
                     lineHeight = 19.sp
                 )
 
@@ -816,6 +859,7 @@ fun AdminChatMasterView(
     onDeleteInquiry: (String) -> Unit,
     onDeleteThread: (threadId: String, contact: String, messages: List<AdminMessage>) -> Unit,
     onMarkThreadRead: (threadId: String, contact: String) -> Unit,
+    onBroadcastFlashMessage: ((title: String, message: String) -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     // Selected conversation thread currently being viewed by Admin (null = Inbox list)
@@ -867,6 +911,7 @@ fun AdminChatMasterView(
             onDeleteThread = { thread ->
                 onDeleteThread(thread.threadId, thread.userContact, thread.messages)
             },
+            onBroadcastFlashMessage = onBroadcastFlashMessage,
             modifier = modifier
         )
     }
@@ -880,11 +925,13 @@ fun AdminChatInboxView(
     threads: List<ChatThread>,
     onSelectThread: (ChatThread) -> Unit,
     onDeleteThread: (ChatThread) -> Unit,
+    onBroadcastFlashMessage: ((title: String, message: String) -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     var searchQuery by remember { mutableStateOf("") }
     var selectedFilter by remember { mutableStateOf("ALL") }
     var threadToDelete by remember { mutableStateOf<ChatThread?>(null) }
+    var showFlashBroadcastDialog by remember { mutableStateOf(false) }
 
     val filteredThreads = remember(threads, searchQuery, selectedFilter) {
         threads.filter { thread ->
@@ -981,6 +1028,30 @@ fun AdminChatInboxView(
                     ),
                     modifier = Modifier.fillMaxWidth()
                 )
+
+                if (onBroadcastFlashMessage != null) {
+                    Spacer(modifier = Modifier.height(10.dp))
+                    Button(
+                        onClick = { showFlashBroadcastDialog = true },
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFDC2626)),
+                        shape = RoundedCornerShape(10.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.NotificationsActive,
+                            contentDescription = null,
+                            tint = Color.White,
+                            modifier = Modifier.size(18.dp)
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            text = "🚨 Broadcast Flash Alert To All Users",
+                            fontWeight = FontWeight.Bold,
+                            color = Color.White,
+                            fontSize = 13.5.sp
+                        )
+                    }
+                }
             }
         }
 
@@ -1071,6 +1142,132 @@ fun AdminChatInboxView(
             }
         )
     }
+
+    if (showFlashBroadcastDialog && onBroadcastFlashMessage != null) {
+        AdminFlashBroadcastDialog(
+            onDismiss = { showFlashBroadcastDialog = false },
+            onBroadcast = { title, message ->
+                onBroadcastFlashMessage(title, message)
+            }
+        )
+    }
+}
+
+/**
+ * Dialog for Admin to compose and trigger Option 1 Full-Screen Flash Alert.
+ * Supports 1,000+ characters, non-skippable alert over lock screen, and helpline chat recording.
+ */
+@Composable
+fun AdminFlashBroadcastDialog(
+    onDismiss: () -> Unit,
+    onBroadcast: (title: String, message: String) -> Unit
+) {
+    var title by remember { mutableStateOf("URGENT MOSQUE ANNOUNCEMENT") }
+    var message by remember { mutableStateOf("") }
+    val context = LocalContext.current
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(
+                    imageVector = Icons.Default.NotificationsActive,
+                    contentDescription = null,
+                    tint = Color(0xFFDC2626),
+                    modifier = Modifier.size(24.dp)
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Text("Broadcast Flash Alert", fontWeight = FontWeight.Bold, fontSize = 17.sp)
+            }
+        },
+        text = {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                Surface(
+                    shape = RoundedCornerShape(8.dp),
+                    color = Color(0xFFFEF2F2),
+                    border = BorderStroke(1.dp, Color(0xFFFCA5A5))
+                ) {
+                    Text(
+                        text = "⚡ Full-screen Alarm/Call style alert. It will pop up immediately on all users' devices (locked or active, app open or closed). User cannot skip without clicking 'OK'. It will also be saved in their 1-to-1 helpline chat history.",
+                        fontSize = 11.5.sp,
+                        color = Color(0xFF991B1B),
+                        lineHeight = 16.sp,
+                        modifier = Modifier.padding(10.dp)
+                    )
+                }
+
+                OutlinedTextField(
+                    value = title,
+                    onValueChange = { title = it },
+                    label = { Text("Alert Title") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth()
+                )
+
+                OutlinedTextField(
+                    value = message,
+                    onValueChange = { message = it },
+                    label = { Text("Announcement Message (Supports 1,000+ chars)") },
+                    placeholder = { Text("Write full mosque announcement here...") },
+                    minLines = 7,
+                    maxLines = 14,
+                    modifier = Modifier.fillMaxWidth()
+                )
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "Length: ${message.length} characters",
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = if (message.length >= 1000) Color(0xFF059669) else Color(0xFF64748B)
+                    )
+                    if (message.length >= 1000) {
+                        Surface(
+                            shape = RoundedCornerShape(6.dp),
+                            color = Color(0xFFECFDF5)
+                        ) {
+                            Text(
+                                text = "✓ 1,000+ chars target met",
+                                fontSize = 10.5.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = Color(0xFF047857),
+                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                            )
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            Button(
+                onClick = {
+                    if (message.trim().isNotBlank()) {
+                        onBroadcast(title.trim(), message.trim())
+                        Toast.makeText(context, "Flash alert broadcasted to all users!", Toast.LENGTH_LONG).show()
+                        onDismiss()
+                    }
+                },
+                enabled = message.trim().isNotBlank(),
+                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFDC2626))
+            ) {
+                Text("🚨 Broadcast Now", color = Color.White, fontWeight = FontWeight.Bold)
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Cancel")
+            }
+        }
+    )
 }
 
 /**

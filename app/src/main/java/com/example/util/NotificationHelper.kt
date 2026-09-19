@@ -14,6 +14,7 @@ import android.os.Build
 import android.os.PowerManager
 import android.util.Log
 import androidx.core.app.NotificationCompat
+import com.example.FlashMessageActivity
 import com.example.MainActivity
 import com.example.R
 
@@ -21,6 +22,10 @@ object NotificationHelper {
     const val CHANNEL_ID_BROADCASTS = "alnoor_community_broadcasts_v3"
     const val CHANNEL_NAME_BROADCASTS = "Alnoor Community Broadcasts"
     const val CHANNEL_DESC_BROADCASTS = "Real-time alerts for events, mosque notices, live updates, and community announcements"
+
+    const val CHANNEL_ID_FLASH = "alnoor_urgent_flash_v1"
+    const val CHANNEL_NAME_FLASH = "Alnoor Urgent Flash Broadcasts"
+    const val CHANNEL_DESC_FLASH = "Mandatory full-screen emergency alerts and important mosque announcements"
 
     const val TOPIC_ALL_MEMBERS = "alnoor_all_members"
     const val TOPIC_LIVE_BROADCASTS = "alnoor_live_broadcasts"
@@ -140,6 +145,126 @@ object NotificationHelper {
             Log.d("NotificationHelper", "High-priority heads-up notification posted with default sound: $displayTitle")
         } catch (e: Exception) {
             Log.w("NotificationHelper", "Failed to display notification: ${e.message}", e)
+        }
+    }
+
+    /**
+     * Triggers Option 1: Full-Screen Alarm/Call Style Flash Alert.
+     *
+     * - Wakes up screen immediately when locked or turned off.
+     * - Fires full-screen intent directly into FlashMessageActivity over lockscreen.
+     * - Posts sticky high-priority alarm notification that cannot be missed.
+     */
+    fun showFlashMessageAlert(
+        context: Context,
+        title: String,
+        message: String,
+        timestamp: String,
+        alertId: String
+    ) {
+        try {
+            val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as? NotificationManager
+                ?: return
+
+            createFlashPriorityChannel(context, notificationManager)
+
+            // 1. Wake screen up with strong wake lock
+            wakeUpScreen(context)
+
+            val flashIntent = Intent(context, FlashMessageActivity::class.java).apply {
+                flags = Intent.FLAG_ACTIVITY_NEW_TASK or
+                        Intent.FLAG_ACTIVITY_CLEAR_TOP or
+                        Intent.FLAG_ACTIVITY_SINGLE_TOP or
+                        Intent.FLAG_ACTIVITY_EXCLUDE_FROM_RECENTS
+                putExtra(FlashMessageActivity.EXTRA_TITLE, title)
+                putExtra(FlashMessageActivity.EXTRA_MESSAGE, message)
+                putExtra(FlashMessageActivity.EXTRA_TIMESTAMP, timestamp)
+                putExtra(FlashMessageActivity.EXTRA_ALERT_ID, alertId)
+            }
+
+            // Directly launch the activity so it pops up over active app or lockscreen immediately
+            try {
+                context.startActivity(flashIntent)
+                Log.d("NotificationHelper", "FlashMessageActivity started directly.")
+            } catch (e: Exception) {
+                Log.w("NotificationHelper", "Direct startActivity deferred to fullScreenIntent: ${e.message}")
+            }
+
+            val fullScreenPendingIntent = PendingIntent.getActivity(
+                context,
+                alertId.hashCode(),
+                flashIntent,
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+            )
+
+            val soundUri = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_ALARM)
+                ?: RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION)
+            val vibrationPattern = longArrayOf(0, 800, 300, 800, 300, 800)
+
+            val appLogoBitmap: Bitmap? = try {
+                BitmapFactory.decodeResource(context.resources, R.drawable.app_logo)
+                    ?: BitmapFactory.decodeResource(context.resources, R.mipmap.ic_launcher)
+            } catch (_: Exception) {
+                null
+            }
+
+            val builder = NotificationCompat.Builder(context, CHANNEL_ID_FLASH)
+                .setSmallIcon(R.drawable.app_logo)
+                .setContentTitle("🚨 $title")
+                .setContentText(message.take(120))
+                .setStyle(NotificationCompat.BigTextStyle().bigText(message))
+                .setPriority(NotificationCompat.PRIORITY_MAX)
+                .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
+                .setCategory(NotificationCompat.CATEGORY_ALARM)
+                .setColor(0xFFDC2626.toInt()) // Red accent for urgent flash alert
+                .setSound(soundUri)
+                .setVibrate(vibrationPattern)
+                .setOngoing(true) // Cannot be swiped away accidentally until handled
+                .setAutoCancel(true)
+                .setFullScreenIntent(fullScreenPendingIntent, true) // Launches immediately over lockscreen
+                .setContentIntent(fullScreenPendingIntent)
+                .apply {
+                    if (appLogoBitmap != null) {
+                        setLargeIcon(appLogoBitmap)
+                    }
+                }
+
+            notificationManager.notify(alertId.hashCode(), builder.build())
+            Log.d("NotificationHelper", "Urgent Flash Alert full-screen notification posted: $title")
+        } catch (e: Exception) {
+            Log.e("NotificationHelper", "Failed to trigger Flash Alert: ${e.message}", e)
+        }
+    }
+
+    private fun createFlashPriorityChannel(context: Context, notificationManager: NotificationManager) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val existing = notificationManager.getNotificationChannel(CHANNEL_ID_FLASH)
+            if (existing == null) {
+                val soundUri = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_ALARM)
+                    ?: RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION)
+                val audioAttributes = AudioAttributes.Builder()
+                    .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
+                    .setUsage(AudioAttributes.USAGE_ALARM)
+                    .setFlags(AudioAttributes.FLAG_AUDIBILITY_ENFORCED)
+                    .build()
+
+                val channel = NotificationChannel(
+                    CHANNEL_ID_FLASH,
+                    CHANNEL_NAME_FLASH,
+                    NotificationManager.IMPORTANCE_HIGH
+                ).apply {
+                    description = CHANNEL_DESC_FLASH
+                    enableVibration(true)
+                    vibrationPattern = longArrayOf(0, 800, 300, 800, 300, 800)
+                    enableLights(true)
+                    lightColor = 0xFFDC2626.toInt()
+                    lockscreenVisibility = Notification.VISIBILITY_PUBLIC
+                    setShowBadge(true)
+                    setSound(soundUri, audioAttributes)
+                }
+                notificationManager.createNotificationChannel(channel)
+                Log.d("NotificationHelper", "Created flash alarm channel: $CHANNEL_ID_FLASH")
+            }
         }
     }
 

@@ -1,8 +1,16 @@
 package com.example.util
 
 import android.util.Log
+import com.example.data.local.AppDatabase
+import com.example.data.local.UserInquiryEntity
 import com.google.firebase.messaging.FirebaseMessagingService
 import com.google.firebase.messaging.RemoteMessage
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
 /**
  * Firebase Cloud Messaging Service for Alnoor Islamic App.
@@ -35,13 +43,58 @@ class AlnoorFirebaseMessagingService : FirebaseMessagingService() {
         val targetTab = remoteMessage.data["target_tab"]
             ?: remoteMessage.data["targetTab"]
 
-        // 2. Display high-priority heads-up banner with sound, vibration, and screen wakeup
-        NotificationHelper.showHeadsUpNotification(
-            context = applicationContext,
-            title = title,
-            body = body,
-            targetTab = targetTab
-        )
+        val isFlash = remoteMessage.data["type"] == "flash" ||
+                remoteMessage.data["is_flash"] == "true" ||
+                remoteMessage.data["flash"] == "true" ||
+                title.contains("FLASH", ignoreCase = true)
+
+        if (isFlash) {
+            val alertId = remoteMessage.data["id"] ?: "flash_${System.currentTimeMillis()}"
+            val timestamp = remoteMessage.data["timestamp_formatted"]
+                ?: SimpleDateFormat("MMM dd, yyyy - hh:mm a", Locale.getDefault()).format(Date())
+
+            NotificationHelper.showFlashMessageAlert(
+                context = applicationContext,
+                title = title,
+                message = body,
+                timestamp = timestamp,
+                alertId = alertId
+            )
+
+            CoroutineScope(Dispatchers.IO).launch {
+                try {
+                    val db = AppDatabase.getDatabase(applicationContext)
+                    db.inquiriesDao().insertInquiry(
+                        UserInquiryEntity(
+                            id = alertId,
+                            senderName = "Alnoor Mosque Administration",
+                            senderContact = "helpline@alnoor.org",
+                            category = "GENERAL",
+                            subject = "⚡ FLASH: $title",
+                            message = body,
+                            timestamp = timestamp,
+                            status = "RESOLVED",
+                            reply = null,
+                            isRead = false,
+                            internalNotes = "FCM Flash Broadcast",
+                            isFromAdmin = true,
+                            threadId = "FLASH_BROADCAST",
+                            createdAt = System.currentTimeMillis()
+                        )
+                    )
+                } catch (e: Exception) {
+                    Log.w(TAG, "Failed to store FCM flash alert: ${e.message}")
+                }
+            }
+        } else {
+            // 2. Display high-priority heads-up banner with sound, vibration, and screen wakeup
+            NotificationHelper.showHeadsUpNotification(
+                context = applicationContext,
+                title = title,
+                body = body,
+                targetTab = targetTab
+            )
+        }
     }
 
     companion object {

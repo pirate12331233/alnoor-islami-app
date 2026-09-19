@@ -43,6 +43,7 @@ import com.example.data.model.UserGender
 import com.example.data.model.UserRole
 import com.example.data.model.YouTubePlaylist
 import com.example.util.PrayerLocationService
+import com.example.util.NotificationHelper
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -776,6 +777,71 @@ class AlnoorRepository private constructor(private val context: Context) {
 
     fun clearNotification() {
         _latestNotification.value = null
+    }
+
+    /**
+     * Broadcasts Option 1 Full-Screen Alarm/Call Style Flash Alert to all users and devices.
+     * Wakes screens, displays over lockscreen, cannot be skipped without clicking OK,
+     * supports 1,000+ characters, and archives automatically in the 1-to-1 Helpline chat.
+     */
+    fun broadcastFlashMessage(title: String, message: String): Result<Unit> {
+        val cleanTitle = title.trim().ifBlank { "URGENT OFFICIAL ANNOUNCEMENT" }
+        val cleanMessage = message.trim()
+        if (cleanMessage.isBlank()) {
+            return Result.failure(IllegalArgumentException("Announcement text cannot be empty."))
+        }
+
+        val alertId = "flash_${System.currentTimeMillis()}"
+        val now = System.currentTimeMillis()
+        val formattedTimestamp = SimpleDateFormat("MMM dd, yyyy - hh:mm a", Locale.getDefault()).format(Date(now))
+
+        // 1. Push to Firestore Cloud flash_broadcasts collection so all devices receive it
+        firestoreSync.pushFlashBroadcastToCloud(
+            alertId = alertId,
+            title = cleanTitle,
+            message = cleanMessage,
+            timestamp = now,
+            formattedTimestamp = formattedTimestamp,
+            scope = repositoryScope,
+            context = context
+        )
+
+        // 2. Immediately archive in local 1-to-1 Helpline chat database with date/time stamp
+        repositoryScope.launch(Dispatchers.IO) {
+            try {
+                db.inquiriesDao().insertInquiry(
+                    UserInquiryEntity(
+                        id = alertId,
+                        senderName = "Alnoor Mosque Administration",
+                        senderContact = "helpline@alnoor.org",
+                        category = "GENERAL",
+                        subject = "⚡ FLASH: $cleanTitle",
+                        message = cleanMessage,
+                        timestamp = formattedTimestamp,
+                        status = "RESOLVED",
+                        reply = null,
+                        isRead = false,
+                        internalNotes = "Broadcast Flash Message to All Community Devices",
+                        isFromAdmin = true,
+                        threadId = "FLASH_BROADCAST",
+                        createdAt = now
+                    )
+                )
+            } catch (e: Exception) {
+                Log.e("AlnoorRepository", "Failed to archive flash message to helpline inquiries: ${e.message}", e)
+            }
+        }
+
+        // 3. Trigger local Full-Screen Flash Alert on the admin device as immediate confirmation
+        NotificationHelper.showFlashMessageAlert(
+            context = context,
+            title = cleanTitle,
+            message = cleanMessage,
+            timestamp = formattedTimestamp,
+            alertId = alertId
+        )
+
+        return Result.success(Unit)
     }
 
     // --- Live Streams ---
@@ -2325,7 +2391,8 @@ class AlnoorRepository private constructor(private val context: Context) {
         firestoreSync.pushUserToCloud(newUser, repositoryScope)
         triggerFcmPushNotification(
             "New Community Registration",
-            "${newUser.fullName} (${newUser.gender.label}) registered with WhatsApp: ${newUser.whatsappNumber}"
+            "${newUser.fullName} (${newUser.gender.label}) registered with WhatsApp: ${newUser.whatsappNumber}",
+            isBroadcast = false
         )
         return Result.success(newUser)
     }
@@ -2352,7 +2419,8 @@ class AlnoorRepository private constructor(private val context: Context) {
 
         triggerFcmPushNotification(
             "Password Reset by Admin",
-            "Password successfully updated for ${user.fullName} (${user.email})"
+            "Password successfully updated for ${user.fullName} (${user.email})",
+            isBroadcast = false
         )
         return true
     }
@@ -2405,7 +2473,8 @@ class AlnoorRepository private constructor(private val context: Context) {
 
         triggerFcmPushNotification(
             "Security: Password Changed",
-            "Password has been successfully updated for ${user.fullName}."
+            "Password has been successfully updated for ${user.fullName}.",
+            isBroadcast = false
         )
 
         return Result.success(updatedUser)
@@ -2448,7 +2517,8 @@ class AlnoorRepository private constructor(private val context: Context) {
         if (result.isSuccess) {
             triggerFcmPushNotification(
                 "Admin Security PIN Updated",
-                "Administrator access PIN / Muhtamim passcode has been securely updated."
+                "Administrator access PIN / Muhtamim passcode has been securely updated.",
+                isBroadcast = false
             )
         }
         return result

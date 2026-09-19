@@ -787,6 +787,8 @@ private fun copyHadithToClipboard(context: Context, h: HadithData) {
         appendLine("— ${h.narrator}")
         appendLine("Book: ${h.book} (${h.reference.ifBlank { "Hadith #${h.hadithNumber}" }})")
         appendLine("Grade: ${h.grade}")
+        appendLine("Alnoor International Trust")
+        appendLine("WhatsApp: +92-333-2434114 | Email: info@alnoorislami.pk")
         append("Shared via Alnoor Islami App")
     }
     val clip = ClipData.newPlainText("Hadith Shareef", formattedText)

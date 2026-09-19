@@ -573,6 +573,9 @@ fun AlnoorAppMainScreen(
                         onMarkThreadRead = { threadId, contact ->
                             repository.markThreadAsRead(threadId, contact)
                         },
+                        onBroadcastFlashMessage = { title, msgText ->
+                            repository.broadcastFlashMessage(title, msgText)
+                        },
                         onNavigateToAuth = { showAuthDialog = true }
                     )
                 }

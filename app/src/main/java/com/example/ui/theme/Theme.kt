@@ -126,4 +126,12 @@ fun MyApplicationTheme(
     )
 }
 
+@Composable
+fun AlnoorTheme(
+    themeMode: AppThemeMode = AppThemeMode.EMERALD_GREEN,
+    content: @Composable () -> Unit
+) {
+    MyApplicationTheme(themeMode = themeMode, content = content)
+}
+
 

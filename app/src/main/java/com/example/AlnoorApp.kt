@@ -20,6 +20,7 @@ class AlnoorApp : Application() {
 
     override fun onCreate() {
         super.onCreate()
+        instance = this
         Log.d(TAG, "AlnoorApp initialized.")
 
         // 1. Initialize notification channel with high priority, default sound and vibration
@@ -70,5 +71,7 @@ class AlnoorApp : Application() {
 
     companion object {
         private const val TAG = "AlnoorApp"
+        var instance: AlnoorApp? = null
+            private set
     }
 }

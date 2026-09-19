@@ -1,13 +1,21 @@
 package com.example
 
+import android.content.Context
+import androidx.test.core.app.ApplicationProvider
 import com.example.data.repository.HadithRepository
+import com.example.util.HadithImageGenerator
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import org.junit.runner.RunWith
+import org.robolectric.RobolectricTestRunner
+import org.robolectric.annotation.Config
 
+@RunWith(RobolectricTestRunner::class)
+@Config(sdk = [36])
 class HadithRepositoryTest {
 
     @Test
@@ -48,4 +56,13 @@ class HadithRepositoryTest {
         val wrapped = HadithRepository.getHadithByIndex(total)
         assertEquals(first.id, wrapped.id)
     }
+
+    @Test
+    fun testHadithImageGenerationWithWatermarkAndContacts() = runBlocking {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        val hadith = HadithRepository.getHadithByIndex(0)
+        val success = HadithImageGenerator.shareHadithAsImage(context, hadith)
+        assertTrue("Hadith image generation and sharing should succeed", success)
+    }
 }
+

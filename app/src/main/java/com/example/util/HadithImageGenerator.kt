@@ -4,9 +4,11 @@ import android.content.ContentValues
 import android.content.Context
 import android.content.Intent
 import android.graphics.Bitmap
+import android.graphics.BitmapFactory
 import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Paint
+import android.graphics.RectF
 import android.graphics.Typeface
 import android.net.Uri
 import android.os.Build
@@ -16,6 +18,7 @@ import android.text.Layout
 import android.text.StaticLayout
 import android.text.TextPaint
 import androidx.core.content.FileProvider
+import com.example.R
 import com.example.data.model.HadithData
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -31,7 +34,7 @@ object HadithImageGenerator {
      */
     suspend fun saveHadithCardAsImage(context: Context, hadith: HadithData): Uri? = withContext(Dispatchers.IO) {
         try {
-            val bitmap = createHadithBitmap(hadith)
+            val bitmap = createHadithBitmap(context, hadith)
             saveBitmapToGallery(context, bitmap, "Hadith_${hadith.book.replace(" ", "_")}_${hadith.hadithNumber}")
         } catch (e: Exception) {
             e.printStackTrace()
@@ -44,7 +47,7 @@ object HadithImageGenerator {
      */
     suspend fun shareHadithAsImage(context: Context, hadith: HadithData): Boolean = withContext(Dispatchers.IO) {
         try {
-            val bitmap = createHadithBitmap(hadith)
+            val bitmap = createHadithBitmap(context, hadith)
             val cachePath = File(context.cacheDir, "images")
             cachePath.mkdirs()
             val file = File(cachePath, "hadith_share_${System.currentTimeMillis()}.png")
@@ -59,7 +62,7 @@ object HadithImageGenerator {
                 putExtra(Intent.EXTRA_SUBJECT, "Daily Hadith: ${hadith.book}")
                 putExtra(
                     Intent.EXTRA_TEXT,
-                    "📖 *Daily Hadith - ${hadith.book} (${hadith.reference})*\n\n${hadith.arabicText}\n\n*Urdu:*\n${hadith.urduTranslation}\n\n*English:*\n${hadith.englishTranslation}\n\n_Shared via Alnoor Islami App_"
+                    "📖 *Daily Hadith - ${hadith.book} (${hadith.reference})*\n\n${hadith.arabicText}\n\n*Urdu:*\n${hadith.urduTranslation}\n\n*English:*\n${hadith.englishTranslation}\n\n_Alnoor International Trust_\nWhatsApp: +92-333-2434114 | Email: info@alnoorislami.pk\n_Shared via Alnoor Islami App_"
                 )
                 addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
             }
@@ -73,7 +76,7 @@ object HadithImageGenerator {
         }
     }
 
-    private fun createHadithBitmap(hadith: HadithData): Bitmap {
+    private fun createHadithBitmap(context: Context, hadith: HadithData): Bitmap {
         val width = 1080
         // Calculate estimated height dynamically based on text lengths
         val padding = 64
@@ -111,9 +114,16 @@ object HadithImageGenerator {
             typeface = Typeface.create(Typeface.DEFAULT, Typeface.NORMAL)
         }
 
-        val footerPaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
+        val footerOrgPaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
             color = Color.parseColor("#D4AF37")
             textSize = 26f
+            typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
+            textAlign = Paint.Align.CENTER
+        }
+
+        val footerContactPaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = Color.parseColor("#E2D39A")
+            textSize = 22.5f
             typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
             textAlign = Paint.Align.CENTER
         }
@@ -130,21 +140,37 @@ object HadithImageGenerator {
                 40 + // Section Label Urdu
                 urduLayout.height + 50 +
                 40 + // Section Label English
-                englishLayout.height + 60 +
-                70 + // Footer badge
+                englishLayout.height + 55 +
+                105 + // Footer: Organization & WhatsApp/Email Contacts
                 padding
 
         val bitmap = Bitmap.createBitmap(width, totalHeight, Bitmap.Config.ARGB_8888)
         val canvas = Canvas(bitmap)
 
-        // Draw Dark Islamic Emerald Background
+        // 1. Draw Dark Islamic Emerald Background
         val bgPaint = Paint().apply {
             color = Color.parseColor("#062319") // Deep Emerald
             style = Paint.Style.FILL
         }
         canvas.drawRect(0f, 0f, width.toFloat(), totalHeight.toFloat(), bgPaint)
 
-        // Draw Decorative Border
+        // 2. Decode Logo and Draw Very Light Decent Watermark in Background
+        val logoRaw = getLogoBitmap(context)
+        if (logoRaw != null) {
+            val transparentLogo = createWatermarkBitmap(logoRaw)
+            val watermarkSize = (width * 0.65f).toInt()
+            val wmLeft = (width - watermarkSize) / 2f
+            val wmTop = (totalHeight - watermarkSize) / 2f
+            val destRect = RectF(wmLeft, wmTop, wmLeft + watermarkSize, wmTop + watermarkSize)
+
+            val watermarkPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                isFilterBitmap = true
+                alpha = 18 // ~7% opacity: very light and subtle, does not disturb text
+            }
+            canvas.drawBitmap(transparentLogo, null, destRect, watermarkPaint)
+        }
+
+        // 3. Draw Decorative Outer Gold Border
         val borderPaint = Paint().apply {
             color = Color.parseColor("#D4AF37") // Gold border
             style = Paint.Style.STROKE
@@ -152,13 +178,48 @@ object HadithImageGenerator {
         }
         canvas.drawRoundRect(24f, 24f, (width - 24).toFloat(), (totalHeight - 24).toFloat(), 32f, 32f, borderPaint)
 
-        // Inner subtle border
+        // 4. Inner subtle border
         val innerBorderPaint = Paint().apply {
             color = Color.parseColor("#1B4D3E")
             style = Paint.Style.STROKE
             strokeWidth = 2f
         }
         canvas.drawRoundRect(36f, 36f, (width - 36).toFloat(), (totalHeight - 36).toFloat(), 24f, 24f, innerBorderPaint)
+
+        // 5. Draw Small Viewable Alnoor Logo in Right Top Corner
+        if (logoRaw != null) {
+            val cornerLogoSize = 96f
+            val cornerRight = width - 52f
+            val cornerTop = 50f
+            val cornerLeft = cornerRight - cornerLogoSize
+            val cornerBottom = cornerTop + cornerLogoSize
+            val centerX = (cornerLeft + cornerRight) / 2f
+            val centerY = (cornerTop + cornerBottom) / 2f
+            val radius = cornerLogoSize / 2f
+
+            // White circular medallion base for optimal contrast & clarity on dark emerald background
+            val discPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                color = Color.WHITE
+                style = Paint.Style.FILL
+            }
+            canvas.drawCircle(centerX, centerY, radius, discPaint)
+
+            // Logo image drawn cleanly inside the circular medallion
+            val logoInset = 4f
+            val logoRect = RectF(cornerLeft + logoInset, cornerTop + logoInset, cornerRight - logoInset, cornerBottom - logoInset)
+            val logoPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                isFilterBitmap = true
+            }
+            canvas.drawBitmap(logoRaw, null, logoRect, logoPaint)
+
+            // Outer gold rim around the medallion
+            val rimPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                color = Color.parseColor("#D4AF37")
+                style = Paint.Style.STROKE
+                strokeWidth = 3f
+            }
+            canvas.drawCircle(centerX, centerY, radius, rimPaint)
+        }
 
         var currentY = padding.toFloat() + 20f
 
@@ -225,10 +286,54 @@ object HadithImageGenerator {
         canvas.restore()
         currentY += englishLayout.height + 40f
 
-        // Footer App Stamp
-        canvas.drawText("Alnoor International Trust • www.alnoorislami.com", width / 2f, currentY + 30f, footerPaint)
+        // Mini gold divider line before footer
+        canvas.drawLine(width / 3f, currentY, (width * 2 / 3f), currentY, linePaint)
+        currentY += 32f
+
+        // Footer App Stamp: Organization Name
+        canvas.drawText("Alnoor International Trust", width / 2f, currentY, footerOrgPaint)
+        currentY += 34f
+
+        // Footer App Stamp: WhatsApp & Email (replaces old website url)
+        canvas.drawText("WhatsApp: +92-333-2434114   •   Email: info@alnoorislami.pk", width / 2f, currentY, footerContactPaint)
 
         return bitmap
+    }
+
+    private fun getLogoBitmap(context: Context): Bitmap? {
+        return try {
+            BitmapFactory.decodeResource(context.resources, R.drawable.app_logo_transparent)
+                ?: BitmapFactory.decodeResource(context.resources, R.drawable.app_logo)
+        } catch (e: Exception) {
+            try {
+                BitmapFactory.decodeResource(context.resources, R.drawable.app_logo)
+            } catch (e2: Exception) {
+                null
+            }
+        }
+    }
+
+    private fun createWatermarkBitmap(source: Bitmap): Bitmap {
+        val w = source.width
+        val h = source.height
+        val outBitmap = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
+        val pixels = IntArray(w * h)
+        source.getPixels(pixels, 0, w, 0, 0, w, h)
+        for (i in pixels.indices) {
+            val color = pixels[i]
+            val a = Color.alpha(color)
+            val r = Color.red(color)
+            val g = Color.green(color)
+            val b = Color.blue(color)
+            // If pixel is pure white or near-white background, make transparent
+            if (r > 240 && g > 240 && b > 240) {
+                pixels[i] = 0
+            } else if (a > 0) {
+                pixels[i] = Color.argb(a, r, g, b)
+            }
+        }
+        outBitmap.setPixels(pixels, 0, w, 0, 0, w, h)
+        return outBitmap
     }
 
     private fun createStaticLayout(text: String, paint: TextPaint, width: Int, align: Layout.Alignment): StaticLayout {
