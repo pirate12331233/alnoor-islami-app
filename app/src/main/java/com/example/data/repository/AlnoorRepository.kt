@@ -30,6 +30,7 @@ import com.example.data.model.GalleryAsset
 import com.example.data.model.GalleryPhoto
 import com.example.data.model.ImportantNoticePopup
 import com.example.data.model.IslamicBook
+import com.example.data.model.UserGuideProvider
 import com.example.data.model.LiveStreamItem
 import com.example.data.model.MediaArchiveItem
 import com.example.data.model.MessageCategory
@@ -308,6 +309,27 @@ class AlnoorRepository private constructor(private val context: Context) {
                 )
             }
             db.booksDao().insertBooks(initialBooks)
+        } else {
+            // Always ensure the official Member User Guide & Manual is available in database
+            val guide = UserGuideProvider.OFFICIAL_USER_GUIDE_BOOK
+            db.booksDao().insertBook(
+                IslamicBookEntity(
+                    id = guide.id,
+                    title = guide.title,
+                    author = guide.author,
+                    category = guide.category,
+                    pagesCount = guide.pagesCount,
+                    language = guide.language,
+                    description = guide.description,
+                    contentPreview = guide.contentPreview,
+                    fileType = guide.fileType,
+                    fileUrl = guide.fileUrl,
+                    fileSize = guide.fileSize,
+                    hasAudioRecitation = guide.hasAudioRecitation,
+                    audioUrl = guide.audioUrl,
+                    isBookmarked = guide.isBookmarked
+                )
+            )
         }
 
         // 3. Seed Photo Albums and Photos
@@ -2096,7 +2118,10 @@ class AlnoorRepository private constructor(private val context: Context) {
         )
     )
 
+    fun getUserGuideBook(): IslamicBook = UserGuideProvider.OFFICIAL_USER_GUIDE_BOOK
+
     private fun getInitialBooks(): List<IslamicBook> = listOf(
+        UserGuideProvider.OFFICIAL_USER_GUIDE_BOOK,
         IslamicBook(
             id = "bk-1",
             title = "Khatam Sharif: Complete Spiritual Guide & Supplications",

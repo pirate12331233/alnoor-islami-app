@@ -5,6 +5,7 @@ import android.net.Uri
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -35,7 +36,9 @@ import androidx.compose.material.icons.filled.Image
 import androidx.compose.material.icons.filled.MenuBook
 import androidx.compose.material.icons.filled.PictureAsPdf
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.UploadFile
+import androidx.compose.material.icons.filled.Verified
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -71,6 +74,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.data.model.IslamicBook
+import com.example.data.model.UserGuideProvider
 import com.example.data.model.UserRole
 import com.example.ui.components.EnhancedImageViewerDialog
 import com.example.ui.components.EnhancedPdfDocumentViewerDialog
@@ -288,13 +292,166 @@ fun LibraryScreen(
                 }
             }
 
+            // Pinned Official Trust Publication: Member User Guide & Manual
+            item {
+                val officialGuide = books.find { it.id == "bk-official-user-guide" }
+                    ?: UserGuideProvider.OFFICIAL_USER_GUIDE_BOOK
+                Card(
+                    shape = RoundedCornerShape(18.dp),
+                    colors = CardDefaults.cardColors(containerColor = Emerald900),
+                    border = BorderStroke(1.5.dp, Gold500),
+                    elevation = CardDefaults.cardElevation(4.dp),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { viewingBook = officialGuide }
+                        .testTag("pinned_official_user_guide_card")
+                ) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(16.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Surface(
+                                shape = RoundedCornerShape(6.dp),
+                                color = Gold500
+                            ) {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
+                                ) {
+                                    Icon(
+                                        Icons.Default.Verified,
+                                        contentDescription = null,
+                                        tint = Emerald900,
+                                        modifier = Modifier.size(13.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(4.dp))
+                                    Text(
+                                        text = "OFFICIAL TRUST PUBLICATION",
+                                        fontWeight = FontWeight.ExtraBold,
+                                        fontSize = 10.sp,
+                                        color = Emerald900
+                                    )
+                                }
+                            }
+
+                            Text(
+                                text = "v3.2 • PDF Manual",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = Gold300,
+                                fontWeight = FontWeight.SemiBold
+                            )
+                        }
+
+                        Spacer(modifier = Modifier.height(10.dp))
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(46.dp)
+                                    .clip(RoundedCornerShape(12.dp))
+                                    .background(Gold500),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    Icons.Default.MenuBook,
+                                    contentDescription = "User Manual",
+                                    tint = Emerald900,
+                                    modifier = Modifier.size(24.dp)
+                                )
+                            }
+
+                            Spacer(modifier = Modifier.width(12.dp))
+
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = "Member User Guide & Operation Manual",
+                                    style = MaterialTheme.typography.titleMedium,
+                                    fontWeight = FontWeight.Bold,
+                                    color = Color.White
+                                )
+                                Text(
+                                    text = "Alnoor Trust Management Board • 18 Pages",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = Gold300
+                                )
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.height(8.dp))
+
+                        Text(
+                            text = "Complete handbook for Live streams, Prayer timetables, Khatam bookings, Quran reading, PDF publications, and Helpline.",
+                            style = MaterialTheme.typography.bodySmall,
+                            fontSize = 11.5.sp,
+                            lineHeight = 16.sp,
+                            color = Color.White.copy(alpha = 0.85f)
+                        )
+
+                        Spacer(modifier = Modifier.height(12.dp))
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Button(
+                                onClick = { viewingBook = officialGuide },
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = Gold500,
+                                    contentColor = Emerald900
+                                ),
+                                shape = RoundedCornerShape(10.dp),
+                                modifier = Modifier.weight(1.2f)
+                            ) {
+                                Icon(Icons.Default.MenuBook, contentDescription = null, modifier = Modifier.size(16.dp))
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text("Read In-App Guide", fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                            }
+
+                            OutlinedButton(
+                                onClick = {
+                                    FilePickerUtils.shareFile(
+                                        context = context,
+                                        fileUrl = officialGuide.fileUrl,
+                                        fileType = "PDF",
+                                        title = officialGuide.title,
+                                        author = officialGuide.author,
+                                        description = officialGuide.description,
+                                        contentPreview = officialGuide.contentPreview
+                                    )
+                                },
+                                shape = RoundedCornerShape(10.dp),
+                                border = BorderStroke(1.dp, Gold400),
+                                modifier = Modifier.weight(1f)
+                            ) {
+                                Icon(Icons.Default.Share, contentDescription = null, tint = Gold300, modifier = Modifier.size(15.dp))
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text("Share PDF", fontSize = 12.sp, color = Gold300)
+                            }
+                        }
+                    }
+                }
+            }
+
             // Document List Cards
             items(filteredBooks) { book ->
                 val isPdf = book.fileType.equals("PDF", ignoreCase = true)
                 val isImage = book.fileType.equals("IMAGE", ignoreCase = true)
+                val isOfficialGuide = book.id == "bk-official-user-guide"
                 Card(
                     shape = RoundedCornerShape(16.dp),
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                    colors = CardDefaults.cardColors(
+                        containerColor = if (isOfficialGuide) MaterialTheme.colorScheme.surfaceVariant else MaterialTheme.colorScheme.surface
+                    ),
+                    border = if (isOfficialGuide) BorderStroke(1.5.dp, Gold500) else null,
                     elevation = CardDefaults.cardElevation(3.dp),
                     modifier = Modifier
                         .fillMaxWidth()

@@ -26,19 +26,24 @@ import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.CleaningServices
 import androidx.compose.material.icons.filled.ColorLens
+import androidx.compose.material.icons.filled.ExpandLess
+import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.HelpOutline
 import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.LibraryBooks
 import androidx.compose.material.icons.filled.MenuBook
 import androidx.compose.material.icons.filled.Mosque
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.Share
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
@@ -59,8 +64,15 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.data.model.AppThemeMode
+import com.example.data.model.UserGuideProvider
+import com.example.ui.components.EnhancedPdfDocumentViewerDialog
+import com.example.ui.theme.Emerald800
+import com.example.ui.theme.Emerald900
+import com.example.ui.theme.Gold300
 import com.example.ui.theme.Gold400
 import com.example.ui.theme.Gold500
+import com.example.ui.theme.Gold600
+import com.example.util.FilePickerUtils
 
 @Composable
 fun AppSettingsScreen(
@@ -69,10 +81,15 @@ fun AppSettingsScreen(
     onNavigateToQuran: () -> Unit = {},
     onNavigateToPrayer: () -> Unit = {},
     onNavigateToHelpline: () -> Unit = {},
+    onNavigateToLibrary: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
     var showCacheClearedToast by remember { mutableStateOf(false) }
+    var showUserGuideViewer by remember { mutableStateOf(false) }
+    var showQuickFaqs by remember { mutableStateOf(false) }
+
+    val guideBook = remember { UserGuideProvider.OFFICIAL_USER_GUIDE_BOOK }
 
     LazyColumn(
         modifier = modifier
@@ -127,6 +144,259 @@ fun AppSettingsScreen(
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
+                    }
+                }
+            }
+        }
+
+        // --- MEMBER USER GUIDE & OFFICIAL MANUAL SECTION ---
+        item {
+            Card(
+                shape = RoundedCornerShape(20.dp),
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.surface
+                ),
+                border = BorderStroke(1.5.dp, Gold500.copy(alpha = 0.6f)),
+                elevation = CardDefaults.cardElevation(3.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .testTag("member_user_guide_settings_card")
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(16.dp)
+                ) {
+                    // Header with Book Icon & Badge
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(42.dp)
+                                    .clip(RoundedCornerShape(12.dp))
+                                    .background(Emerald900),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.MenuBook,
+                                    contentDescription = "User Guide",
+                                    tint = Gold400,
+                                    modifier = Modifier.size(24.dp)
+                                )
+                            }
+                            Spacer(modifier = Modifier.width(12.dp))
+                            Column {
+                                Text(
+                                    text = "Member User Guide & Manual",
+                                    style = MaterialTheme.typography.titleMedium,
+                                    fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.onSurface
+                                )
+                                Text(
+                                    text = "Official App Guide & Complete Walkthrough",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    fontSize = 11.5.sp,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        }
+
+                        Surface(
+                            shape = RoundedCornerShape(8.dp),
+                            color = Gold500.copy(alpha = 0.18f),
+                            border = BorderStroke(1.dp, Gold500.copy(alpha = 0.5f))
+                        ) {
+                            Text(
+                                text = "v3.2 • PDF",
+                                style = MaterialTheme.typography.labelSmall,
+                                fontWeight = FontWeight.Bold,
+                                color = Gold600,
+                                modifier = Modifier.padding(horizontal = 7.dp, vertical = 3.dp)
+                            )
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(10.dp))
+
+                    Text(
+                        text = "Read the comprehensive, step-by-step user manual covering Live Broadcasts, Prayer Times, Quran Majeed, Khatam Sharif, Digital Library, Donations, and Support. Works 100% offline with built-in viewer and PDF export.",
+                        style = MaterialTheme.typography.bodySmall,
+                        fontSize = 12.sp,
+                        lineHeight = 18.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+
+                    Spacer(modifier = Modifier.height(14.dp))
+
+                    // Action Buttons: Read In-App Guide & Share/Download PDF
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Button(
+                            onClick = { showUserGuideViewer = true },
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = Emerald900,
+                                contentColor = Gold300
+                            ),
+                            shape = RoundedCornerShape(12.dp),
+                            modifier = Modifier
+                                .weight(1.3f)
+                                .testTag("read_user_guide_in_app_button")
+                        ) {
+                            Icon(Icons.Default.MenuBook, contentDescription = null, modifier = Modifier.size(17.dp))
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text(
+                                text = "Read In-App Guide",
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 12.5.sp
+                            )
+                        }
+
+                        OutlinedButton(
+                            onClick = {
+                                FilePickerUtils.shareFile(
+                                    context = context,
+                                    fileUrl = guideBook.fileUrl,
+                                    fileType = "PDF",
+                                    title = guideBook.title,
+                                    author = guideBook.author,
+                                    description = guideBook.description,
+                                    contentPreview = guideBook.contentPreview
+                                )
+                            },
+                            shape = RoundedCornerShape(12.dp),
+                            border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.5f)),
+                            modifier = Modifier
+                                .weight(1f)
+                                .testTag("share_user_guide_pdf_button")
+                        ) {
+                            Icon(Icons.Default.Share, contentDescription = null, modifier = Modifier.size(16.dp))
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text(
+                                text = "Share PDF",
+                                fontSize = 12.sp,
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    // Secondary Navigation to Library
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "Also listed as official publication in Islamic Library",
+                            style = MaterialTheme.typography.bodySmall,
+                            fontSize = 11.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f)
+                        )
+                        Text(
+                            text = "View in Library →",
+                            style = MaterialTheme.typography.labelSmall,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier
+                                .clickable { onNavigateToLibrary() }
+                                .padding(4.dp)
+                                .testTag("navigate_to_library_guide_link")
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.height(10.dp))
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.15f))
+                    Spacer(modifier = Modifier.height(10.dp))
+
+                    // Expandable Quick FAQs
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { showQuickFaqs = !showQuickFaqs }
+                            .padding(vertical = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(
+                                Icons.Default.HelpOutline,
+                                contentDescription = null,
+                                tint = Gold600,
+                                modifier = Modifier.size(18.dp)
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                text = "Quick Feature FAQs (${UserGuideProvider.QUICK_FAQS.size} topics)",
+                                style = MaterialTheme.typography.titleSmall,
+                                fontWeight = FontWeight.SemiBold,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                        }
+                        Icon(
+                            imageVector = if (showQuickFaqs) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+                            contentDescription = if (showQuickFaqs) "Collapse FAQs" else "Expand FAQs",
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+
+                    AnimatedVisibility(visible = showQuickFaqs) {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(top = 10.dp),
+                            verticalArrangement = Arrangement.spacedBy(10.dp)
+                        ) {
+                            UserGuideProvider.QUICK_FAQS.forEach { faq ->
+                                Surface(
+                                    shape = RoundedCornerShape(12.dp),
+                                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.2f)),
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    Column(modifier = Modifier.padding(12.dp)) {
+                                        Row(verticalAlignment = Alignment.CenterVertically) {
+                                            Surface(
+                                                shape = RoundedCornerShape(4.dp),
+                                                color = Emerald900
+                                            ) {
+                                                Text(
+                                                    text = faq.category,
+                                                    fontSize = 9.5.sp,
+                                                    fontWeight = FontWeight.Bold,
+                                                    color = Gold300,
+                                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                                )
+                                            }
+                                            Spacer(modifier = Modifier.width(8.dp))
+                                            Text(
+                                                text = faq.question,
+                                                style = MaterialTheme.typography.bodyMedium,
+                                                fontWeight = FontWeight.Bold,
+                                                color = MaterialTheme.colorScheme.onSurface
+                                            )
+                                        }
+                                        Spacer(modifier = Modifier.height(6.dp))
+                                        Text(
+                                            text = faq.answer,
+                                            style = MaterialTheme.typography.bodySmall,
+                                            fontSize = 11.5.sp,
+                                            lineHeight = 16.5.sp,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                    }
+                                }
+                            }
+                        }
                     }
                 }
             }
@@ -430,6 +700,21 @@ fun AppSettingsScreen(
                 }
             }
         }
+    }
+
+    // --- Interactive In-App User Guide Reader Dialog ---
+    if (showUserGuideViewer) {
+        EnhancedPdfDocumentViewerDialog(
+            title = guideBook.title,
+            author = guideBook.author,
+            category = guideBook.category,
+            description = guideBook.description,
+            contentPreview = guideBook.contentPreview,
+            fileUrl = guideBook.fileUrl,
+            fileSize = guideBook.fileSize,
+            pagesCount = guideBook.pagesCount,
+            onDismiss = { showUserGuideViewer = false }
+        )
     }
 }
 

@@ -679,28 +679,98 @@ object FilePickerUtils {
             isAntiAlias = true
         }
 
-        val contentLayout = StaticLayout.Builder.obtain(
-            contentToShow,
-            0,
-            contentToShow.length,
-            mainContentPaint,
-            pageWidth - 80
-        ).setAlignment(Layout.Alignment.ALIGN_NORMAL).build()
-
-        canvas1.save()
-        canvas1.translate(40f, currentY)
-        contentLayout.draw(canvas1)
-        canvas1.restore()
-
         val footerPaint = TextPaint().apply {
             color = Color.rgb(156, 163, 175)
             textSize = 9.5f
             textAlign = Paint.Align.CENTER
             isAntiAlias = true
         }
-        canvas1.drawText("Alnoor Islamic Center  •  Official Publication Document  •  Page 1 of 1", (pageWidth / 2).toFloat(), (pageHeight - 30).toFloat(), footerPaint)
 
-        pdfDocument.finishPage(page1)
+        var currentPage = page1
+        var currentCanvas = canvas1
+        var pageNumber = 1
+
+        val drawPageFooter = { canvas: Canvas, pageNum: Int ->
+            canvas.drawText(
+                "Alnoor Islamic Center  •  Official Publication Document  •  Page $pageNum",
+                (pageWidth / 2).toFloat(),
+                (pageHeight - 30).toFloat(),
+                footerPaint
+            )
+        }
+
+        val paragraphs = contentToShow.split(Regex("(?:\r?\n){2,}"))
+        for (para in paragraphs) {
+            val trimmed = para.trim()
+            if (trimmed.isEmpty()) continue
+
+            // Determine if this paragraph is a chapter header or subheader
+            val isHeader = trimmed.startsWith("CHAPTER") || trimmed.startsWith("===") || trimmed.startsWith("---") || (trimmed.length < 50 && trimmed.endsWith(":"))
+            val paintToUse = if (isHeader) {
+                TextPaint().apply {
+                    color = Color.rgb(6, 78, 59)
+                    textSize = 12.5f
+                    typeface = Typeface.create(Typeface.SANS_SERIF, Typeface.BOLD)
+                    isAntiAlias = true
+                }
+            } else {
+                mainContentPaint
+            }
+
+            val layout = StaticLayout.Builder.obtain(
+                trimmed,
+                0,
+                trimmed.length,
+                paintToUse,
+                pageWidth - 80
+            ).setAlignment(Layout.Alignment.ALIGN_NORMAL).build()
+
+            // If layout doesn't fit on this page, finish current page and start a new page
+            if (currentY + layout.height > pageHeight - 55f) {
+                drawPageFooter(currentCanvas, pageNumber)
+                pdfDocument.finishPage(currentPage)
+
+                pageNumber++
+                val newPageInfo = PdfDocument.PageInfo.Builder(pageWidth, pageHeight, pageNumber).create()
+                currentPage = pdfDocument.startPage(newPageInfo)
+                currentCanvas = currentPage.canvas
+
+                // Draw background
+                currentCanvas.drawRect(0f, 0f, pageWidth.toFloat(), pageHeight.toFloat(), bgPaint)
+
+                // Top running header bar
+                val runningHeaderPaint = Paint().apply { color = Color.rgb(6, 78, 59) }
+                currentCanvas.drawRect(0f, 0f, pageWidth.toFloat(), 36f, runningHeaderPaint)
+
+                val runningTextPaint = TextPaint().apply {
+                    color = Color.rgb(253, 230, 138)
+                    textSize = 10f
+                    typeface = Typeface.create(Typeface.SANS_SERIF, Typeface.BOLD)
+                    isAntiAlias = true
+                }
+                currentCanvas.drawText("ALNOOR ISLAMI COMMUNITY APP  •  OFFICIAL PUBLICATION", 40f, 22f, runningTextPaint)
+
+                val runningTitlePaint = TextPaint().apply {
+                    color = Color.WHITE
+                    textSize = 9.5f
+                    textAlign = Paint.Align.RIGHT
+                    isAntiAlias = true
+                }
+                val shortTitle = if (title.length > 30) title.take(28) + "..." else title
+                currentCanvas.drawText(shortTitle, (pageWidth - 40).toFloat(), 22f, runningTitlePaint)
+
+                currentY = 56f
+            }
+
+            currentCanvas.save()
+            currentCanvas.translate(40f, currentY)
+            layout.draw(currentCanvas)
+            currentCanvas.restore()
+            currentY += layout.height + 12f
+        }
+
+        drawPageFooter(currentCanvas, pageNumber)
+        pdfDocument.finishPage(currentPage)
 
         FileOutputStream(outputFile).use { fos ->
             pdfDocument.writeTo(fos)

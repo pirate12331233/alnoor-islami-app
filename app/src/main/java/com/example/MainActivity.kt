@@ -636,7 +636,8 @@ fun AlnoorAppMainScreen(
                         },
                         onNavigateToQuran = { selectedTab = AppTab.QURAN },
                         onNavigateToPrayer = { selectedTab = AppTab.PRAYER_TIMES },
-                        onNavigateToHelpline = { selectedTab = AppTab.MESSAGES }
+                        onNavigateToHelpline = { selectedTab = AppTab.MESSAGES },
+                        onNavigateToLibrary = { selectedTab = AppTab.LIBRARY }
                     )
                 }
             }

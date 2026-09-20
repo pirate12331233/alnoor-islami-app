@@ -1,0 +1,558 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Alnoor Islami - Complete Official Member User Guide</title>
+    <style>
+        @page {
+            size: A4 portrait;
+            margin: 1.8cm 1.6cm 1.8cm 1.6cm;
+            @bottom-right {
+                content: "Page " counter(page);
+                font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+                font-size: 9pt;
+                color: #7f8c8d;
+            }
+            @bottom-left {
+                content: "Al Noor International Trust • Member Guide";
+                font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+                font-size: 9pt;
+                color: #7f8c8d;
+            }
+        }
+        
+        body {
+            font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, Roboto, Helvetica, Arial, sans-serif;
+            color: #2c3e50;
+            line-height: 1.6;
+            margin: 0;
+            padding: 24px;
+            background-color: #ffffff;
+        }
+
+        .cover-page {
+            text-align: center;
+            padding: 40px 20px;
+            background: linear-gradient(180deg, #0B3B24 0%, #062315 100%);
+            color: #ffffff;
+            border-radius: 16px;
+            border: 3px solid #D4AF37;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.15);
+            margin-bottom: 40px;
+            page-break-after: always;
+        }
+
+        .logo-img {
+            width: 130px;
+            height: 130px;
+            border-radius: 50%;
+            background: #ffffff;
+            padding: 6px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+            border: 3px solid #D4AF37;
+            margin-bottom: 16px;
+        }
+
+        .bismillah {
+            font-size: 26pt;
+            color: #D4AF37;
+            font-family: 'Traditional Arabic', 'Amiri', serif;
+            margin-bottom: 12px;
+            letter-spacing: 1px;
+        }
+
+        .cover-title {
+            font-size: 32pt;
+            font-weight: 800;
+            color: #ffffff;
+            margin: 0;
+            letter-spacing: 2px;
+        }
+
+        .cover-sub {
+            font-size: 16pt;
+            color: #D4AF37;
+            font-weight: 600;
+            margin-top: 6px;
+            margin-bottom: 24px;
+        }
+
+        .badge-pill {
+            display: inline-block;
+            background: rgba(212, 175, 55, 0.2);
+            border: 1px solid #D4AF37;
+            color: #F9E79F;
+            padding: 6px 18px;
+            border-radius: 20px;
+            font-size: 11pt;
+            font-weight: 600;
+            letter-spacing: 1px;
+            margin-bottom: 30px;
+        }
+
+        .doc-desc {
+            max-width: 650px;
+            margin: 0 auto;
+            font-size: 12pt;
+            color: #E8F8F5;
+            line-height: 1.6;
+        }
+
+        .toc-container {
+            background: #f8fbf9;
+            border: 1px solid #d4edda;
+            border-left: 6px solid #0B3B24;
+            border-radius: 8px;
+            padding: 24px 30px;
+            margin-bottom: 40px;
+            page-break-after: always;
+        }
+
+        .toc-title {
+            font-size: 18pt;
+            font-weight: bold;
+            color: #0B3B24;
+            margin-top: 0;
+            margin-bottom: 18px;
+            border-bottom: 2px solid #D4AF37;
+            padding-bottom: 8px;
+        }
+
+        .toc-list {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+        }
+
+        .toc-list li {
+            padding: 8px 0;
+            border-bottom: 1px dashed #dcdde1;
+            display: flex;
+            justify-content: space-between;
+            font-size: 11.5pt;
+        }
+
+        .toc-list li a {
+            color: #145A32;
+            text-decoration: none;
+            font-weight: 600;
+        }
+
+        .toc-list li span {
+            color: #7f8c8d;
+        }
+
+        h1 {
+            color: #0B3B24;
+            font-size: 20pt;
+            border-bottom: 2px solid #0B3B24;
+            padding-bottom: 6px;
+            margin-top: 36px;
+            page-break-before: auto;
+        }
+
+        h2 {
+            color: #145A32;
+            font-size: 15pt;
+            margin-top: 24px;
+            border-left: 4px solid #D4AF37;
+            padding-left: 10px;
+        }
+
+        h3 {
+            color: #B7950B;
+            font-size: 12.5pt;
+            margin-top: 16px;
+        }
+
+        p, li {
+            font-size: 11pt;
+            color: #333333;
+        }
+
+        .step-box {
+            background: #ffffff;
+            border: 1px solid #e1e8ed;
+            border-radius: 8px;
+            padding: 16px 20px;
+            margin: 16px 0;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.03);
+        }
+
+        .step-number {
+            display: inline-block;
+            background: #0B3B24;
+            color: #ffffff;
+            font-weight: bold;
+            border-radius: 50%;
+            width: 26px;
+            height: 26px;
+            text-align: center;
+            line-height: 26px;
+            font-size: 11pt;
+            margin-right: 10px;
+        }
+
+        .callout {
+            padding: 14px 18px;
+            border-radius: 8px;
+            margin: 16px 0;
+            font-size: 10.5pt;
+        }
+
+        .callout-info {
+            background: #E8F8F5;
+            border-left: 5px solid #117A65;
+            color: #0E6251;
+        }
+
+        .callout-warning {
+            background: #FEF9E7;
+            border-left: 5px solid #F1C40F;
+            color: #7D6608;
+        }
+
+        .callout-alert {
+            background: #FDEDEC;
+            border-left: 5px solid #E74C3C;
+            color: #78281F;
+        }
+
+        .card-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 20px 0;
+            border: 1px solid #D4AF37;
+            border-radius: 8px;
+            overflow: hidden;
+            box-shadow: 0 3px 8px rgba(0,0,0,0.04);
+            page-break-inside: avoid;
+        }
+
+        .card-table th {
+            background: #0B3B24;
+            color: #ffffff;
+            text-align: left;
+            padding: 12px 16px;
+            font-size: 12pt;
+            border-bottom: 2px solid #D4AF37;
+        }
+
+        .card-table td {
+            padding: 10px 14px;
+            border-bottom: 1px solid #eef2f5;
+            font-size: 10.5pt;
+        }
+
+        .card-table tr:nth-child(even) td {
+            background: #fafcfb;
+        }
+
+        .card-table td.prop-name {
+            font-weight: bold;
+            color: #0B3B24;
+            width: 26%;
+            background: #f4f8f5;
+            border-right: 1px solid #e0e8e3;
+        }
+
+        .footer-note {
+            text-align: center;
+            margin-top: 50px;
+            padding: 24px;
+            border-top: 2px solid #D4AF37;
+            color: #7f8c8d;
+            font-size: 10pt;
+        }
+
+        @media print {
+            body { padding: 0; }
+            .no-print { display: none; }
+        }
+    </style>
+</head>
+<body>
+
+    <!-- COVER PAGE -->
+    <div class="cover-page">
+        <div class="bismillah">بِسْمِ اللَّهِ الرَّحْمَٰنِ الرَّحِيمِ</div>
+        <img src="app/src/main/res/drawable/app_logo.png" alt="Alnoor Islami Crest" class="logo-img">
+        <h1 class="cover-title" style="border:none; color:white; margin:0;">AL NOOR ISLAMI</h1>
+        <div class="cover-sub">AL NOOR INTERNATIONAL TRUST</div>
+        <div class="badge-pill">OFFICIAL MEMBER &amp; USER GUIDE MANUAL</div>
+        <div class="doc-desc">
+            A comprehensive, illustrated reference manual for congregation members worldwide. Covering setup, authentication, daily spiritual tools, 12 Action Cards, live Mahafil streaming, offline audio listening, and self-help troubleshooting.
+        </div>
+        <div style="margin-top: 30px; font-size: 10pt; color: #F9E79F;">
+            Document Version: 2.4.0 • Release Date: September 2026 • Audience: General Public &amp; Members
+        </div>
+    </div>
+
+    <!-- TABLE OF CONTENTS -->
+    <div class="toc-container">
+        <div class="toc-title">📖 Manual Directory &amp; Navigation</div>
+        <ul class="toc-list">
+            <li><a href="#ch1">Chapter 1: Application Purpose &amp; Overview</a> <span>Page 2</span></li>
+            <li><a href="#ch2">Chapter 2: System Requirements &amp; Installation Guide</a> <span>Page 2</span></li>
+            <li><a href="#ch3">Chapter 3: Account Registration (Google, Email, Phone)</a> <span>Page 3</span></li>
+            <li><a href="#ch4">Chapter 4: Login, Session Security &amp; Password Reset</a> <span>Page 3</span></li>
+            <li><a href="#ch5">Chapter 5: Exploring the Home Dashboard Architecture</a> <span>Page 4</span></li>
+            <li><a href="#ch6">Chapter 6: Detailed Specifications of All 12 Action Cards</a> <span>Page 5</span></li>
+            <li><a href="#ch7">Chapter 7: Worship Modules: Darood, Quran &amp; Prayer Times</a> <span>Page 8</span></li>
+            <li><a href="#ch8">Chapter 8: Live YouTube Broadcasts &amp; Audio Player</a> <span>Page 9</span></li>
+            <li><a href="#ch9">Chapter 9: One-Tap In-App Updates &amp; Silent APK Purge</a> <span>Page 10</span></li>
+            <li><a href="#ch10">Chapter 10: Troubleshooting FAQ &amp; Official Trust Support</a> <span>Page 11</span></li>
+        </ul>
+    </div>
+
+    <!-- CHAPTER 1 -->
+    <h1 id="ch1">Chapter 1: Application Purpose &amp; Overview</h1>
+    <p>
+        The <strong>Alnoor Islami</strong> mobile app serves as the official mobile portal of <em>Al Noor International Trust</em>. Designed to nourish the spiritual lives of members and the general public, it connects believers to daily Quranic recitation, Bukhari &amp; Muslim Hadith, worldwide collective Darood Shareef recitations, high-definition live Mahafil broadcasts, and scholarly guidance in an ad-free, secure environment.
+    </p>
+    <div class="callout callout-info">
+        <strong>Purity Guarantee:</strong> The application contains zero third-party advertisements, zero monetization paywalls, and respects user privacy without selling or harvesting personal data.
+    </div>
+
+    <!-- CHAPTER 2 -->
+    <h1 id="ch2">Chapter 2: System Requirements &amp; Installation</h1>
+    <h2>2.1 Supported Devices</h2>
+    <ul>
+        <li><strong>Operating System:</strong> Android 7.0 (Nougat) up to Android 15+.</li>
+        <li><strong>Memory (RAM):</strong> 2 GB minimum (3 GB+ recommended for background audio).</li>
+        <li><strong>Storage Space:</strong> ~60 MB for initial installation, with ~150 MB buffer for offline Quran pages and audio caching.</li>
+        <li><strong>Connectivity:</strong> Wi-Fi or Mobile Data (4G/5G). Essential functions (Quran, Prayer times, local Tasbih counter) work fully offline.</li>
+    </ul>
+
+    <h2>2.2 Step-by-Step APK Installation</h2>
+    <div class="step-box">
+        <span class="step-number">1</span><strong>Download the official APK:</strong> Tap the verified download link from the official Alnoor website (<code>alnoorislami.pk</code>) or authorized WhatsApp channel.
+    </div>
+    <div class="step-box">
+        <span class="step-number">2</span><strong>Grant Unknown Sources (One-Time):</strong> If prompted by Android, tap <em>Settings</em> and toggle <em>Allow from this source</em>.
+    </div>
+    <div class="step-box">
+        <span class="step-number">3</span><strong>Complete Setup:</strong> Tap <em>Install</em>. When complete, tap <em>Open</em>.
+    </div>
+    <div class="callout callout-warning">
+        <strong>Notification Permission (Android 13+):</strong> When the system dialog asks <em>"Allow Alnoor Islami to send notifications?"</em>, choose <strong>ALLOW</strong> so you never miss prayer times, live broadcasts, or urgent trust announcements.
+    </div>
+
+    <!-- CHAPTER 3 -->
+    <h1 id="ch3">Chapter 3: Account Registration</h1>
+    <p>Creating an account links your spiritual activity (such as your daily Darood tally) to your personal profile so your history is preserved even if you change phones.</p>
+    <h2>3.1 Registration Options</h2>
+    <ul>
+        <li><strong>Option A — Google Sign-In (Recommended):</strong> Tap the <em>Continue with Google</em> button. Select your Google account to log in immediately with zero password friction.</li>
+        <li><strong>Option B — Email &amp; Password:</strong> Tap <em>Create Account</em>, input your Name, valid Email address, and set a password with at least 6 characters.</li>
+        <li><strong>Option C — Phone Number:</strong> Enter your mobile number prefixed with your country code (e.g. +92, +44, +1, +971).</li>
+    </ul>
+
+    <!-- CHAPTER 4 -->
+    <h1 id="ch4">Chapter 4: Login &amp; Password Recovery</h1>
+    <h2>4.1 Logging In</h2>
+    <p>Enter your registered Email/Phone and Password, then tap <strong>Sign In</strong>. The app maintains a persistent secure token so you remain signed in on your personal device.</p>
+    <h2>4.2 Forgot Password Procedure</h2>
+    <div class="step-box">
+        <span class="step-number">1</span>On the login screen, tap the gold <strong>"Forgot Password?"</strong> link.
+    </div>
+    <div class="step-box">
+        <span class="step-number">2</span>Enter your registered email address and tap <strong>Send Password Reset Email</strong>.
+    </div>
+    <div class="step-box">
+        <span class="step-number">3</span>Open your email client, look for an email from Alnoor Trust, click the secure reset link, and define your new password.
+    </div>
+
+    <!-- CHAPTER 5 -->
+    <h1 id="ch5">Chapter 5: Exploring the Home Dashboard</h1>
+    <p>The dashboard is designed with modern Material 3 aesthetics, balancing generous negative space with crisp typography and responsive cards:</p>
+    <ul>
+        <li><strong>Header Bar:</strong> Displays the Alnoor emblem, your member status, and quick notification alerts.</li>
+        <li><strong>Bismillah Banner:</strong> A prominent golden invocation greeting you upon every session.</li>
+        <li><strong>Daily Hadith Preview:</strong> Quick-read snippet of the daily Hadith with an expandable inline reader.</li>
+        <li><strong>Application Actions Grid:</strong> 12 dedicated, touch-optimized action blocks covering the app's full suite of spiritual features.</li>
+    </ul>
+
+    <!-- CHAPTER 6 -->
+    <h1 id="ch6">Chapter 6: Detailed Specifications of All 12 Action Cards</h1>
+    <p>Each card on your dashboard is specifically designed for a dedicated purpose:</p>
+
+    <!-- Card 1 -->
+    <table class="card-table">
+        <tr><th colspan="2">1. Alnoor Islami Channel (Card Key: ALNOOR_CHANNEL)</th></tr>
+        <tr><td class="prop-name">Dashboard Subtitle</td><td>Official YouTube Channel, recorded Mahafil archive.</td></tr>
+        <tr><td class="prop-name">Purpose</td><td>Direct multimedia gateway to the Trust's official YouTube catalog, weekly speeches, and live broadcasts.</td></tr>
+        <tr><td class="prop-name">Sub-Actions</td><td>
+            • <strong>Click to YouTube Channel:</strong> Opens full channel archive in the native YouTube app.<br>
+            • <strong>Click to view Live Scheduled Mehfil:</strong> Deep-links directly to current or upcoming live broadcasts.
+        </td></tr>
+        <tr><td class="prop-name">Member Benefits</td><td>Instant HD streaming with smart browser fallback if YouTube app is disabled.</td></tr>
+    </table>
+
+    <!-- Card 2 -->
+    <table class="card-table">
+        <tr><th colspan="2">2. Darood Sharif Collection (Card Key: DAROOD)</th></tr>
+        <tr><td class="prop-name">Dashboard Subtitle</td><td>Send your daily Darood sharif recitation for overall collection.</td></tr>
+        <tr><td class="prop-name">Purpose</td><td>Enables members to record their daily Salawat and join a worldwide congregation treasury.</td></tr>
+        <tr><td class="prop-name">User Action</td><td>Tap to launch the Interactive Tasbih Counter with vibration feedback and submit counts to the Trust.</td></tr>
+        <tr><td class="prop-name">Member Benefits</td><td>Recite offline; the app automatically syncs your tally once you reconnect.</td></tr>
+    </table>
+
+    <!-- Card 3 -->
+    <table class="card-table">
+        <tr><th colspan="2">3. Daily Hadith Shareef (Card Key: HADITH)</th></tr>
+        <tr><td class="prop-name">Dashboard Subtitle</td><td>Authentic Bukhari &amp; Muslim Hadith in Arabic, Urdu &amp; English with card save &amp; share.</td></tr>
+        <tr><td class="prop-name">Purpose</td><td>Delivers daily authentic Hadith with full Arabic vowel points (Aa'raab), authentic Urdu and English translations.</td></tr>
+        <tr><td class="prop-name">User Action</td><td>Tap <em>Read</em> to view full text; tap <em>Save 9:16 Image</em> to export a full-screen vertical poster for WhatsApp status.</td></tr>
+        <tr><td class="prop-name">Member Benefits</td><td>Crystal-clear 1080×1920 poster exports that fit phone screens with zero cropping.</td></tr>
+    </table>
+
+    <!-- Card 4 -->
+    <table class="card-table">
+        <tr><th colspan="2">4. Events &amp; Mahafil Calendar (Card Key: EVENTS)</th></tr>
+        <tr><td class="prop-name">Dashboard Subtitle</td><td>Schedule of upcoming Bayanat, Shab-e-Baraat, Ramadan, and monthly gatherings.</td></tr>
+        <tr><td class="prop-name">Purpose</td><td>Community schedule of spiritual gatherings, Urs events, and weekly Zikr assemblies.</td></tr>
+        <tr><td class="prop-name">User Action</td><td>Browse events by date; tap on any event to view venue directions and sync to your Google Calendar.</td></tr>
+        <tr><td class="prop-name">Member Benefits</td><td>Countdown timers and Google Maps location pins for venues.</td></tr>
+    </table>
+
+    <!-- Card 5 -->
+    <table class="card-table">
+        <tr><th colspan="2">5. Official Announcements &amp; Notices (Card Key: NOTICES)</th></tr>
+        <tr><td class="prop-name">Dashboard Subtitle</td><td>Trust directives, moon sighting reports, and urgent community messages.</td></tr>
+        <tr><td class="prop-name">Purpose</td><td>Verified digital noticeboard for official statements issued by Alnoor leadership.</td></tr>
+        <tr><td class="prop-name">User Action</td><td>Read announcements, download official circular PDFs, and receive urgent push alerts.</td></tr>
+        <tr><td class="prop-name">Member Benefits</td><td>Zero rumors: every notice includes an official Trust verification watermark.</td></tr>
+    </table>
+
+    <!-- Card 6 -->
+    <table class="card-table">
+        <tr><th colspan="2">6. Quran-e-Pak (Card Key: QURAN)</th></tr>
+        <tr><td class="prop-name">Dashboard Subtitle</td><td>Read Holy Quran with 16-line page format, Urdu translation &amp; last-read bookmark.</td></tr>
+        <tr><td class="prop-name">Purpose</td><td>Sacred reading interface honoring the traditional 16-line South Asian / Indo-Pak printed Quran.</td></tr>
+        <tr><td class="prop-name">User Action</td><td>Navigate by Surah (1-114) or Parah (1-30). One tap resumes from your exact saved Ayah.</td></tr>
+        <tr><td class="prop-name">Member Benefits</td><td>High-definition vector Arabic fonts, night eye-comfort mode, and 100% offline reading.</td></tr>
+    </table>
+
+    <!-- Card 7 -->
+    <table class="card-table">
+        <tr><th colspan="2">7. Prayer Times &amp; Qibla Compass (Card Key: PRAYER)</th></tr>
+        <tr><td class="prop-name">Dashboard Subtitle</td><td>Accurate Fajr, Dhuhr, Asr, Maghrib &amp; Isha timings calibrated to your location.</td></tr>
+        <tr><td class="prop-name">Purpose</td><td>Calculates precise prayer times anywhere on Earth with an interactive Qibla pointer.</td></tr>
+        <tr><td class="prop-name">User Action</td><td>Check daily timetable and rotate device to align with the visual Kaaba direction compass.</td></tr>
+        <tr><td class="prop-name">Member Benefits</td><td>Hanafi and Shafi'i Asr calculation options with countdown timer to next prayer.</td></tr>
+    </table>
+
+    <!-- Card 8 -->
+    <table class="card-table">
+        <tr><th colspan="2">8. Islamic Library &amp; Publications (Card Key: LIBRARY)</th></tr>
+        <tr><td class="prop-name">Dashboard Subtitle</td><td>Download authentic Islamic books, research papers, and Wazaif booklets in PDF.</td></tr>
+        <tr><td class="prop-name">Purpose</td><td>Digital library of authentic treatises, spiritual guides, and research publications.</td></tr>
+        <tr><td class="prop-name">User Action</td><td>Filter books by topic (Tasawwuf, Fiqh, Seerah, Duas) and open in the high-speed in-app reader.</td></tr>
+        <tr><td class="prop-name">Member Benefits</td><td>Built-in PDF reader with bookmarking, text search, and offline storage.</td></tr>
+    </table>
+
+    <!-- Card 9 -->
+    <table class="card-table">
+        <tr><th colspan="2">9. Audio Bayanat &amp; Media Archive (Card Key: MEDIA)</th></tr>
+        <tr><td class="prop-name">Dashboard Subtitle</td><td>Listen to inspiring lectures, Naats, and spiritual discourses with background playback.</td></tr>
+        <tr><td class="prop-name">Purpose</td><td>Audio streaming hub offering discourses that play even with your screen locked.</td></tr>
+        <tr><td class="prop-name">User Action</td><td>Tap any discourse to stream; tap the download icon to save tracks for offline road trips.</td></tr>
+        <tr><td class="prop-name">Member Benefits</td><td>Lock-screen controls, sleep timer (15/30/60m), and variable playback speeds (1x, 1.25x, 1.5x).</td></tr>
+    </table>
+
+    <!-- Card 10 -->
+    <table class="card-table">
+        <tr><th colspan="2">10. Photo Gallery &amp; Historical Archives (Card Key: GALLERY)</th></tr>
+        <tr><td class="prop-name">Dashboard Subtitle</td><td>High-resolution pictures of Mahafil, construction projects, and trust welfare activities.</td></tr>
+        <tr><td class="prop-name">Purpose</td><td>Visual chronicle of welfare works, medical camps, ration distribution, and gatherings.</td></tr>
+        <tr><td class="prop-name">User Action</td><td>Browse albums, view full-screen pictures with pinch-to-zoom, and save images to your phone.</td></tr>
+        <tr><td class="prop-name">Member Benefits</td><td>High-definition photography with date and venue descriptions.</td></tr>
+    </table>
+
+    <!-- Card 11 -->
+    <table class="card-table">
+        <tr><th colspan="2">11. Ask a Question / Scholar Inquiry (Card Key: MESSAGES)</th></tr>
+        <tr><td class="prop-name">Dashboard Subtitle</td><td>Submit your spiritual, religious, or personal inquiry to the Trust scholars privately.</td></tr>
+        <tr><td class="prop-name">Purpose</td><td>Confidential, private advice desk linking members directly to qualified scholars.</td></tr>
+        <tr><td class="prop-name">User Action</td><td>Type your inquiry, select category (Worship, Family, Duas), and submit securely.</td></tr>
+        <tr><td class="prop-name">Member Benefits</td><td>Receive private responses with notification alerts when scholars reply.</td></tr>
+    </table>
+
+    <!-- Card 12 -->
+    <table class="card-table">
+        <tr><th colspan="2">12. App Preferences &amp; Card Customization (Card Key: SETTINGS)</th></tr>
+        <tr><td class="prop-name">Dashboard Subtitle</td><td>Customize dashboard layout, theme color, language, and notification alerts.</td></tr>
+        <tr><td class="prop-name">Purpose</td><td>Personalizes your app experience to match your daily habits.</td></tr>
+        <tr><td class="prop-name">User Action</td><td>Reorder action cards via drag-and-drop, switch app language, and manage notification tones.</td></tr>
+        <tr><td class="prop-name">Member Benefits</td><td>Custom dashboard ordering, storage cache cleaner, and font size adjustment.</td></tr>
+    </table>
+
+    <!-- CHAPTER 7 -->
+    <h1 id="ch7">Chapter 7: Worship Modules (Darood, Quran, Prayer)</h1>
+    <h2>7.1 Darood Counter Usage</h2>
+    <p>The Darood Counter is designed to be effortless and mindful:</p>
+    <ul>
+        <li><strong>Haptic Tap:</strong> Tap the large green circle to count. The subtle vibration allows counting without staring at the screen.</li>
+        <li><strong>Batch Increment:</strong> Tapping <em>+33</em> or <em>+100</em> lets you add recitations completed on physical beads.</li>
+        <li><strong>Sending to Trust:</strong> Tap <em>Submit Recitation</em> when your session ends. Your tally is added to the global sum.</li>
+    </ul>
+
+    <h2>7.2 Quran-e-Pak Reader</h2>
+    <ul>
+        <li><strong>Last Read Marker:</strong> Whenever you exit, your reading progress is automatically bookmarked down to the exact ayah.</li>
+        <li><strong>Quick Search:</strong> Jump to any Surah or Parah in under two taps.</li>
+    </ul>
+
+    <!-- CHAPTER 8 -->
+    <h1 id="ch8">Chapter 8: Live YouTube Broadcasts &amp; Audio Player</h1>
+    <h2>8.1 Joining a Live Broadcast</h2>
+    <p>During active Mahafil, the <em>Alnoor Islami Channel</em> card displays the live link. Simply tap <strong>"Click to view Live Scheduled Mehfil"</strong> to enter the live stream in the YouTube app or browser.</p>
+    <h2>8.2 Background Audio Service</h2>
+    <p>You can listen to discourses with your screen locked:</p>
+    <div class="step-box"><span class="step-number">1</span> Open <em>Audio Bayanat &amp; Media Archive</em>.</div>
+    <div class="step-box"><span class="step-number">2</span> Select your desired track and press Play.</div>
+    <div class="step-box"><span class="step-number">3</span> Lock your phone or switch to another app. Audio continues seamlessly through your headphones or speaker.</div>
+
+    <!-- CHAPTER 9 -->
+    <h1 id="ch9">Chapter 9: In-App Updates &amp; Silent APK Purge</h1>
+    <p>The app features an automated in-place update engine:</p>
+    <ul>
+        <li><strong>1-Tap Update:</strong> When a new update is released, a single high-contrast button appears: <strong>"Update Now (19.0 MB)"</strong>.</li>
+        <li><strong>Live Progress:</strong> Shows real-time percentage and download speed.</li>
+        <li><strong>Instant Install:</strong> Once complete, the button transitions to <strong>"Install Update Now"</strong>.</li>
+        <li><strong>Automatic Silent Cleanup:</strong> The app silently scans and purges all previous or corrupted APK download fragments, keeping your device storage clean and fast.</li>
+    </ul>
+
+    <!-- CHAPTER 10 -->
+    <h1 id="ch10">Chapter 10: Troubleshooting FAQ &amp; Support</h1>
+    <div class="callout callout-alert">
+        <strong>Q1: Audio pauses when I turn off my phone screen?</strong><br>
+        <strong>Fix:</strong> Some phones (Samsung, Xiaomi, Huawei) aggressively close background apps. Go to phone <em>Settings &gt; Apps &gt; Alnoor Islami &gt; Battery</em> and set it to <em>"Unrestricted"</em> or <em>"No restrictions"</em>.
+    </div>
+    <div class="callout callout-warning">
+        <strong>Q2: Prayer times do not match my local mosque?</strong><br>
+        <strong>Fix:</strong> Ensure GPS is enabled. Go to <em>Settings &gt; Prayer Settings</em> and select your regional Asr calculation school (Hanafi or Shafi'i).
+    </div>
+    <div class="callout callout-info">
+        <strong>Q3: APK download gets interrupted?</strong><br>
+        <strong>Fix:</strong> On the update screen, tap the collapsible <em>"Having trouble? Alternative options"</em> accordion and select <em>"Download in Browser"</em>.
+    </div>
+
+    <h2>Official Support Helpdesk</h2>
+    <ul>
+        <li><strong>WhatsApp Helpdesk:</strong> +92-333-2434114</li>
+        <li><strong>Support Email:</strong> info@alnoorislami.pk</li>
+        <li><strong>Official Website:</strong> https://alnoorislami.pk</li>
+        <li><strong>Headquarters:</strong> Al Noor International Trust, Karachi, Pakistan</li>
+    </ul>
+
+    <div class="footer-note">
+        جَزَاكُمُ اللَّهُ خَيْرًا<br>
+        May Allah accept your prayers, salawat, and recitations.<br>
+        <strong>Al Noor International Trust • Member Documentation Team</strong>
+    </div>
+
+</body>
+</html>
