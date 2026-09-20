@@ -78,71 +78,119 @@ object HadithImageGenerator {
 
     private fun createHadithBitmap(context: Context, hadith: HadithData): Bitmap {
         val width = 1080
-        // Calculate estimated height dynamically based on text lengths
-        val padding = 64
-        val contentWidth = width - (padding * 2)
+        val targetHeight = 1920 // Universal 9:16 Vertical Story / Status Standard (1080 x 1920)
+        val horizontalPadding = 76
+        val contentWidth = width - (horizontalPadding * 2)
+
+        // Measure text at base 9:16 font scale to determine vertical fitting
+        val baseArabicSize = 54f
+        val baseUrduSize = 44f
+        val baseEnglishSize = 36f
+        val baseHeaderSize = 42f
+        val baseSubHeaderSize = 32f
+        val baseLabelSize = 30f
+        val baseFooterOrgSize = 32f
+        val baseFooterContactSize = 25f
+
+        // Initial measurement pass to see if text requires scaling down for exceptionally long Hadiths
+        val testArabicPaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
+            textSize = baseArabicSize
+            typeface = Typeface.create(Typeface.SERIF, Typeface.BOLD)
+        }
+        val testUrduPaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
+            textSize = baseUrduSize
+            typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
+        }
+        val testEnglishPaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
+            textSize = baseEnglishSize
+            typeface = Typeface.create(Typeface.DEFAULT, Typeface.NORMAL)
+        }
+
+        val testArabicLayout = createStaticLayout(hadith.arabicText, testArabicPaint, contentWidth, Layout.Alignment.ALIGN_CENTER, 8f, 1.35f)
+        val testUrduLayout = createStaticLayout(hadith.urduTranslation, testUrduPaint, contentWidth, Layout.Alignment.ALIGN_NORMAL, 6f, 1.3f)
+        val testEnglishLayout = createStaticLayout(hadith.englishTranslation, testEnglishPaint, contentWidth, Layout.Alignment.ALIGN_NORMAL, 6f, 1.25f)
+
+        val fixedOverheadBase = 520f // Top header, subheader, labels, dividers, and footer
+        val rawContentHeight = fixedOverheadBase + testArabicLayout.height + testUrduLayout.height + testEnglishLayout.height
+
+        // Calculate dynamic scale factor: 1.0f for normal/short Hadiths, scaling down gracefully for long Hadiths
+        val scale = if (rawContentHeight > targetHeight - 120f) {
+            ((targetHeight - 120f) / rawContentHeight).coerceIn(0.72f, 1.0f)
+        } else {
+            1.0f
+        }
 
         val headerPaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
             color = Color.parseColor("#E6B800") // Gold
-            textSize = 34f
+            textSize = baseHeaderSize * scale
             typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
             textAlign = Paint.Align.CENTER
         }
 
         val subHeaderPaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
             color = Color.parseColor("#B0BEC5") // Silver-grey
-            textSize = 28f
+            textSize = baseSubHeaderSize * scale
             typeface = Typeface.create(Typeface.DEFAULT, Typeface.NORMAL)
             textAlign = Paint.Align.CENTER
         }
 
         val arabicPaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
-            color = Color.parseColor("#FFFFFF")
-            textSize = 38f
+            color = Color.parseColor("#FFFFFF") // Crisp White
+            textSize = baseArabicSize * scale
             typeface = Typeface.create(Typeface.SERIF, Typeface.BOLD)
         }
 
         val urduPaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
             color = Color.parseColor("#D4EDDA") // Soft islamic green-white
-            textSize = 32f
+            textSize = baseUrduSize * scale
             typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
         }
 
         val englishPaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
             color = Color.parseColor("#F8F9FA")
-            textSize = 30f
+            textSize = baseEnglishSize * scale
             typeface = Typeface.create(Typeface.DEFAULT, Typeface.NORMAL)
+        }
+
+        val labelPaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = Color.parseColor("#E6B800")
+            textSize = baseLabelSize * scale
+            typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
         }
 
         val footerOrgPaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
             color = Color.parseColor("#D4AF37")
-            textSize = 26f
+            textSize = baseFooterOrgSize * scale
             typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
             textAlign = Paint.Align.CENTER
         }
 
         val footerContactPaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
             color = Color.parseColor("#E2D39A")
-            textSize = 22.5f
+            textSize = baseFooterContactSize * scale
             typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
             textAlign = Paint.Align.CENTER
         }
 
-        val arabicLayout = createStaticLayout(hadith.arabicText, arabicPaint, contentWidth, Layout.Alignment.ALIGN_CENTER)
-        val urduLayout = createStaticLayout(hadith.urduTranslation, urduPaint, contentWidth, Layout.Alignment.ALIGN_NORMAL)
-        val englishLayout = createStaticLayout(hadith.englishTranslation, englishPaint, contentWidth, Layout.Alignment.ALIGN_NORMAL)
+        // Layouts with final scaled paints
+        val arabicLayout = createStaticLayout(hadith.arabicText, arabicPaint, contentWidth, Layout.Alignment.ALIGN_CENTER, 8f * scale, 1.35f)
+        val urduLayout = createStaticLayout(hadith.urduTranslation, urduPaint, contentWidth, Layout.Alignment.ALIGN_NORMAL, 6f * scale, 1.3f)
+        val englishLayout = createStaticLayout(hadith.englishTranslation, englishPaint, contentWidth, Layout.Alignment.ALIGN_NORMAL, 6f * scale, 1.25f)
 
-        val totalHeight = padding +
-                80 + // App Header
-                70 + // Book & Ref
-                60 + // Divider
-                arabicLayout.height + 50 +
-                40 + // Section Label Urdu
-                urduLayout.height + 50 +
-                40 + // Section Label English
-                englishLayout.height + 55 +
-                105 + // Footer: Organization & WhatsApp/Email Contacts
-                padding
+        // Calculate heights & distribute vertical space evenly across the 9:16 frame
+        val headerAreaHeight = 170f * scale
+        val labelAreaHeight = (42f * scale) * 2
+        val footerAreaHeight = 150f * scale
+        val totalTextHeight = arabicLayout.height + urduLayout.height + englishLayout.height
+        val minRequiredHeight = headerAreaHeight + labelAreaHeight + footerAreaHeight + totalTextHeight + 200f
+
+        // Ensure canvas is at least 1920 (9:16), or expand if an enormous Hadith exceeds even with scaling
+        val totalHeight = maxOf(targetHeight, minRequiredHeight.toInt())
+
+        // Calculate flexible vertical spacing between sections to achieve balanced vertical alignment
+        val remainingVerticalSpace = (totalHeight - (headerAreaHeight + labelAreaHeight + footerAreaHeight + totalTextHeight)).coerceAtLeast(100f)
+        val sectionGap = (remainingVerticalSpace / 6f).coerceIn(24f, 65f)
+        val topMargin = ((remainingVerticalSpace - (sectionGap * 4f)) / 2f).coerceIn(40f, 90f)
 
         val bitmap = Bitmap.createBitmap(width, totalHeight, Bitmap.Config.ARGB_8888)
         val canvas = Canvas(bitmap)
@@ -154,43 +202,43 @@ object HadithImageGenerator {
         }
         canvas.drawRect(0f, 0f, width.toFloat(), totalHeight.toFloat(), bgPaint)
 
-        // 2. Decode Logo and Draw Very Light Decent Watermark in Background
+        // 2. Decode Logo and Draw Light Watermark in Center of the 9:16 Background
         val logoRaw = getLogoBitmap(context)
         if (logoRaw != null) {
             val transparentLogo = createWatermarkBitmap(logoRaw)
-            val watermarkSize = (width * 0.65f).toInt()
+            val watermarkSize = (width * 0.72f).toInt()
             val wmLeft = (width - watermarkSize) / 2f
             val wmTop = (totalHeight - watermarkSize) / 2f
             val destRect = RectF(wmLeft, wmTop, wmLeft + watermarkSize, wmTop + watermarkSize)
 
             val watermarkPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
                 isFilterBitmap = true
-                alpha = 18 // ~7% opacity: very light and subtle, does not disturb text
+                alpha = 18 // ~7% opacity: very light and subtle, maintains high text legibility
             }
             canvas.drawBitmap(transparentLogo, null, destRect, watermarkPaint)
         }
 
-        // 3. Draw Decorative Outer Gold Border
+        // 3. Draw Decorative Outer Gold Border (9:16 full-bleed rounded frame)
         val borderPaint = Paint().apply {
-            color = Color.parseColor("#D4AF37") // Gold border
+            color = Color.parseColor("#D4AF37") // Royal Gold border
             style = Paint.Style.STROKE
             strokeWidth = 6f
         }
-        canvas.drawRoundRect(24f, 24f, (width - 24).toFloat(), (totalHeight - 24).toFloat(), 32f, 32f, borderPaint)
+        canvas.drawRoundRect(28f, 28f, (width - 28).toFloat(), (totalHeight - 28).toFloat(), 36f, 36f, borderPaint)
 
         // 4. Inner subtle border
         val innerBorderPaint = Paint().apply {
             color = Color.parseColor("#1B4D3E")
             style = Paint.Style.STROKE
-            strokeWidth = 2f
+            strokeWidth = 2.5f
         }
-        canvas.drawRoundRect(36f, 36f, (width - 36).toFloat(), (totalHeight - 36).toFloat(), 24f, 24f, innerBorderPaint)
+        canvas.drawRoundRect(42f, 42f, (width - 42).toFloat(), (totalHeight - 42).toFloat(), 26f, 26f, innerBorderPaint)
 
-        // 5. Draw Small Viewable Alnoor Logo in Right Top Corner
+        // 5. Draw Circular Alnoor Logo Medallion in Top-Right Corner
         if (logoRaw != null) {
-            val cornerLogoSize = 96f
-            val cornerRight = width - 52f
-            val cornerTop = 50f
+            val cornerLogoSize = 114f
+            val cornerRight = width - 58f
+            val cornerTop = 54f
             val cornerLeft = cornerRight - cornerLogoSize
             val cornerBottom = cornerTop + cornerLogoSize
             val centerX = (cornerLeft + cornerRight) / 2f
@@ -205,7 +253,7 @@ object HadithImageGenerator {
             canvas.drawCircle(centerX, centerY, radius, discPaint)
 
             // Logo image drawn cleanly inside the circular medallion
-            val logoInset = 4f
+            val logoInset = 5f
             val logoRect = RectF(cornerLeft + logoInset, cornerTop + logoInset, cornerRight - logoInset, cornerBottom - logoInset)
             val logoPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
                 isFilterBitmap = true
@@ -216,85 +264,80 @@ object HadithImageGenerator {
             val rimPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
                 color = Color.parseColor("#D4AF37")
                 style = Paint.Style.STROKE
-                strokeWidth = 3f
+                strokeWidth = 3.5f
             }
             canvas.drawCircle(centerX, centerY, radius, rimPaint)
         }
 
-        var currentY = padding.toFloat() + 20f
+        var currentY = topMargin + 30f
 
         // Draw Top App Branding
-        canvas.drawText("AL NOOR ISLAMI • DAILY HADITH", width / 2f, currentY + 30f, headerPaint)
-        currentY += 60f
+        canvas.drawText("AL NOOR ISLAMI • DAILY HADITH", width / 2f, currentY + 32f, headerPaint)
+        currentY += 66f * scale
 
         // Draw Book & Reference
         val refText = "${hadith.book} • Hadith #${hadith.hadithNumber} (${hadith.grade})"
         canvas.drawText(refText, width / 2f, currentY + 24f, subHeaderPaint)
-        currentY += 60f
+        currentY += 56f * scale
 
         // Draw Gold Separator Line
         val linePaint = Paint().apply {
             color = Color.parseColor("#D4AF37")
-            strokeWidth = 3f
+            strokeWidth = 3.5f
         }
-        canvas.drawLine(width / 4f, currentY, (width * 3 / 4f), currentY, linePaint)
-        currentY += 40f
+        canvas.drawLine(width / 3.5f, currentY, width * 2.5f / 3.5f, currentY, linePaint)
+        currentY += sectionGap
 
         // Draw Arabic Text
         canvas.save()
-        canvas.translate(padding.toFloat(), currentY)
+        canvas.translate(horizontalPadding.toFloat(), currentY)
         arabicLayout.draw(canvas)
         canvas.restore()
-        currentY += arabicLayout.height + 40f
+        currentY += arabicLayout.height + sectionGap
 
-        // Divider
+        // Subtle Divider Line
         val subtleLinePaint = Paint().apply {
             color = Color.parseColor("#1B4D3E")
-            strokeWidth = 2f
+            strokeWidth = 2.5f
         }
-        canvas.drawLine(padding.toFloat(), currentY, (width - padding).toFloat(), currentY, subtleLinePaint)
-        currentY += 30f
+        canvas.drawLine(horizontalPadding.toFloat(), currentY, (width - horizontalPadding).toFloat(), currentY, subtleLinePaint)
+        currentY += (sectionGap * 0.75f)
 
         // Urdu Translation Header
-        val labelPaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
-            color = Color.parseColor("#E6B800")
-            textSize = 26f
-            typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
-        }
-        canvas.drawText("اردو ترجمہ (Urdu Translation):", padding.toFloat(), currentY, labelPaint)
-        currentY += 36f
+        canvas.drawText("اردو ترجمہ (Urdu Translation):", horizontalPadding.toFloat(), currentY, labelPaint)
+        currentY += 40f * scale
 
         // Urdu Text
         canvas.save()
-        canvas.translate(padding.toFloat(), currentY)
+        canvas.translate(horizontalPadding.toFloat(), currentY)
         urduLayout.draw(canvas)
         canvas.restore()
-        currentY += urduLayout.height + 40f
+        currentY += urduLayout.height + sectionGap
 
-        // Divider
-        canvas.drawLine(padding.toFloat(), currentY, (width - padding).toFloat(), currentY, subtleLinePaint)
-        currentY += 30f
+        // Subtle Divider Line
+        canvas.drawLine(horizontalPadding.toFloat(), currentY, (width - horizontalPadding).toFloat(), currentY, subtleLinePaint)
+        currentY += (sectionGap * 0.75f)
 
         // English Translation Header
-        canvas.drawText("English Translation:", padding.toFloat(), currentY, labelPaint)
-        currentY += 36f
+        canvas.drawText("English Translation:", horizontalPadding.toFloat(), currentY, labelPaint)
+        currentY += 40f * scale
 
         // English Text
         canvas.save()
-        canvas.translate(padding.toFloat(), currentY)
+        canvas.translate(horizontalPadding.toFloat(), currentY)
         englishLayout.draw(canvas)
         canvas.restore()
-        currentY += englishLayout.height + 40f
+        currentY += englishLayout.height + sectionGap
 
         // Mini gold divider line before footer
-        canvas.drawLine(width / 3f, currentY, (width * 2 / 3f), currentY, linePaint)
-        currentY += 32f
+        canvas.drawLine(width / 3.2f, currentY, width * 2.2f / 3.2f, currentY, linePaint)
+        currentY += 42f * scale
 
         // Footer App Stamp: Organization Name
         canvas.drawText("Alnoor International Trust", width / 2f, currentY, footerOrgPaint)
-        currentY += 34f
+        currentY += 40f * scale
 
-        // Footer App Stamp: WhatsApp & Email (replaces old website url)
+        // Footer App Stamp: WhatsApp & Email
         canvas.drawText("WhatsApp: +92-333-2434114   •   Email: info@alnoorislami.pk", width / 2f, currentY, footerContactPaint)
 
         return bitmap
@@ -336,16 +379,23 @@ object HadithImageGenerator {
         return outBitmap
     }
 
-    private fun createStaticLayout(text: String, paint: TextPaint, width: Int, align: Layout.Alignment): StaticLayout {
+    private fun createStaticLayout(
+        text: String,
+        paint: TextPaint,
+        width: Int,
+        align: Layout.Alignment,
+        lineSpacingAdd: Float = 6f,
+        lineSpacingMult: Float = 1.25f
+    ): StaticLayout {
         return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
             StaticLayout.Builder.obtain(text, 0, text.length, paint, width)
                 .setAlignment(align)
-                .setLineSpacing(6f, 1.25f)
+                .setLineSpacing(lineSpacingAdd, lineSpacingMult)
                 .setIncludePad(true)
                 .build()
         } else {
             @Suppress("DEPRECATION")
-            StaticLayout(text, paint, width, align, 1.25f, 6f, true)
+            StaticLayout(text, paint, width, align, lineSpacingMult, lineSpacingAdd, true)
         }
     }
 
