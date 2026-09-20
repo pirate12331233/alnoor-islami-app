@@ -179,6 +179,16 @@ class AlnoorRepository private constructor(private val context: Context) {
         appThemePrefs.edit().putString("active_theme_id", mode.id).apply()
     }
 
+    // Admin-controlled Startup Intro Video toggle (defaults to true)
+    private val startupVideoPrefs = context.getSharedPreferences("alnoor_startup_video_prefs", Context.MODE_PRIVATE)
+    private val _isStartupVideoEnabled = MutableStateFlow(startupVideoPrefs.getBoolean("is_startup_video_enabled", true))
+    val isStartupVideoEnabled = _isStartupVideoEnabled.asStateFlow()
+
+    fun setStartupVideoEnabled(enabled: Boolean) {
+        _isStartupVideoEnabled.value = enabled
+        startupVideoPrefs.edit().putBoolean("is_startup_video_enabled", enabled).apply()
+    }
+
     // App Version & Forced Update State
     val appVersionInfo = firestoreSync.appVersionInfo
 
@@ -1151,7 +1161,6 @@ class AlnoorRepository private constructor(private val context: Context) {
     fun updatePrayerTimes(newTimes: PrayerTimesData) {
         _prayerTimes.value = newTimes
         PrayerLocationService.savePrayerTimes(context, newTimes, updateTimestamp = true)
-        triggerFcmPushNotification("Prayer Schedule Updated", "Prayer timings updated for ${newTimes.locationName}.")
     }
 
     // --- Mahafil Archive & YouTube Playlists (Admin CRUD) ---
@@ -1673,22 +1682,6 @@ class AlnoorRepository private constructor(private val context: Context) {
 
         // Push directly to Firestore so the other party's device receives the message immediately
         firestoreSync.pushInquiryToCloud(newMessage, repositoryScope)
-
-        if (isFromAdmin) {
-            triggerFcmPushNotification(
-                "Admin Response Received",
-                "Alnoor Admin: ${text.take(60)}",
-                targetTab = "MESSAGES",
-                isBroadcast = false
-            )
-        } else {
-            triggerFcmPushNotification(
-                "New Helpline Message",
-                "${senderName}: ${text.take(60)}",
-                targetTab = "MESSAGES",
-                isBroadcast = false
-            )
-        }
     }
 
     fun submitUserMessage(senderName: String, senderContact: String, category: MessageCategory, subject: String, messageText: String) {

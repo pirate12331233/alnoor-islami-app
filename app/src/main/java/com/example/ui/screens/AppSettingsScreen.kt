@@ -35,8 +35,10 @@ import androidx.compose.material.icons.filled.MenuBook
 import androidx.compose.material.icons.filled.Mosque
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.Palette
+import androidx.compose.material.icons.filled.PlayCircle
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Share
+import androidx.compose.material.icons.filled.Videocam
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -47,6 +49,8 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Switch
+import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -65,6 +69,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.data.model.AppThemeMode
 import com.example.data.model.UserGuideProvider
+import com.example.data.model.UserRole
 import com.example.ui.components.EnhancedPdfDocumentViewerDialog
 import com.example.ui.theme.Emerald800
 import com.example.ui.theme.Emerald900
@@ -78,6 +83,9 @@ import com.example.util.FilePickerUtils
 fun AppSettingsScreen(
     currentThemeMode: AppThemeMode,
     onThemeChanged: (AppThemeMode) -> Unit,
+    currentRole: UserRole = UserRole.STANDARD_USER,
+    isStartupVideoEnabled: Boolean = true,
+    onToggleStartupVideo: ((Boolean) -> Unit)? = null,
     onNavigateToQuran: () -> Unit = {},
     onNavigateToPrayer: () -> Unit = {},
     onNavigateToHelpline: () -> Unit = {},
@@ -624,6 +632,139 @@ fun AppSettingsScreen(
                         actionLabel = "Helpline",
                         onAction = onNavigateToHelpline
                     )
+                }
+            }
+        }
+
+        // --- ADMIN CONTROLS: STARTUP INTRO VIDEO TOGGLE ---
+        if (currentRole == UserRole.ADMIN) {
+            item {
+                Card(
+                    shape = RoundedCornerShape(20.dp),
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.surface
+                    ),
+                    border = BorderStroke(1.dp, Gold500.copy(alpha = 0.5f)),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .testTag("admin_startup_video_card")
+                ) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(16.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier.weight(1f)
+                            ) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(40.dp)
+                                        .clip(RoundedCornerShape(12.dp))
+                                        .background(
+                                            Brush.linearGradient(
+                                                listOf(Emerald800, Emerald900)
+                                            )
+                                        )
+                                        .border(1.dp, Gold400.copy(alpha = 0.5f), RoundedCornerShape(12.dp)),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Videocam,
+                                        contentDescription = "Startup Intro Video",
+                                        tint = Gold400,
+                                        modifier = Modifier.size(22.dp)
+                                    )
+                                }
+                                Spacer(modifier = Modifier.width(12.dp))
+                                Column {
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Text(
+                                            text = "Startup Intro Video",
+                                            style = MaterialTheme.typography.titleMedium,
+                                            fontWeight = FontWeight.Bold,
+                                            color = MaterialTheme.colorScheme.onSurface
+                                        )
+                                        Spacer(modifier = Modifier.width(8.dp))
+                                        Surface(
+                                            shape = RoundedCornerShape(6.dp),
+                                            color = Gold500.copy(alpha = 0.2f),
+                                            border = BorderStroke(0.5.dp, Gold500)
+                                        ) {
+                                            Text(
+                                                text = "ADMIN",
+                                                fontSize = 9.sp,
+                                                fontWeight = FontWeight.Bold,
+                                                color = Gold500,
+                                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                            )
+                                        }
+                                    }
+                                    Spacer(modifier = Modifier.height(2.dp))
+                                    Text(
+                                        text = if (isStartupVideoEnabled) "10s Intro animation plays on app launch" else "Intro animation disabled (direct to dashboard)",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        fontSize = 11.5.sp,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                            }
+
+                            Switch(
+                                checked = isStartupVideoEnabled,
+                                onCheckedChange = { isChecked ->
+                                    onToggleStartupVideo?.invoke(isChecked)
+                                    Toast.makeText(
+                                        context,
+                                        if (isChecked) "Startup intro video enabled on launch" else "Startup intro video disabled (direct launch)",
+                                        Toast.LENGTH_SHORT
+                                    ).show()
+                                },
+                                colors = SwitchDefaults.colors(
+                                    checkedThumbColor = Gold400,
+                                    checkedTrackColor = Emerald800
+                                ),
+                                modifier = Modifier.testTag("switch_startup_video")
+                            )
+                        }
+
+                        HorizontalDivider(
+                            color = MaterialTheme.colorScheme.outline.copy(alpha = 0.15f),
+                            modifier = Modifier.padding(vertical = 10.dp)
+                        )
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = "Status: ${if (isStartupVideoEnabled) "Active (Plays on start)" else "Disabled (Immediate launch)"}",
+                                fontSize = 11.5.sp,
+                                fontWeight = FontWeight.Medium,
+                                color = if (isStartupVideoEnabled) Emerald800 else MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+
+                            Surface(
+                                shape = RoundedCornerShape(8.dp),
+                                color = if (isStartupVideoEnabled) Emerald900 else MaterialTheme.colorScheme.surfaceVariant
+                            ) {
+                                Text(
+                                    text = if (isStartupVideoEnabled) "ENABLED" else "DISABLED",
+                                    fontSize = 10.5.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = if (isStartupVideoEnabled) Gold300 else MaterialTheme.colorScheme.onSurfaceVariant,
+                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
+                                )
+                            }
+                        }
+                    }
                 }
             }
         }

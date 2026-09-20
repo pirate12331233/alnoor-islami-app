@@ -200,6 +200,7 @@ fun AlnoorAppMainScreen(
     val registeredUsers by repository.registeredUsers.collectAsState()
     val actionCardConfigs by repository.actionCardConfigs.collectAsState()
     val currentThemeMode by repository.currentThemeMode.collectAsState()
+    val isStartupVideoEnabled by repository.isStartupVideoEnabled.collectAsState()
     val isInitialSyncComplete by repository.isInitialSyncComplete.collectAsState()
     val initialSyncMessage by repository.initialSyncMessage.collectAsState()
     val appVersionInfo by repository.appVersionInfo.collectAsState()
@@ -219,8 +220,8 @@ fun AlnoorAppMainScreen(
     var showStartupVideo by remember { mutableStateOf(true) }
     var adminBypassedUpdate by remember { mutableStateOf(false) }
 
-    // --- REQUIREMENT: 10-Second Startup Animation Video Runs First Every Time App Opens ---
-    if (showStartupVideo) {
+    // --- REQUIREMENT: 10-Second Startup Animation Video Runs First When Enabled by Admin ---
+    if (isStartupVideoEnabled && showStartupVideo) {
         StartupVideoFullScreenPlayer(
             onFinished = { showStartupVideo = false }
         )
@@ -633,6 +634,11 @@ fun AlnoorAppMainScreen(
                         currentThemeMode = currentThemeMode,
                         onThemeChanged = { newTheme ->
                             repository.setAppThemeMode(newTheme)
+                        },
+                        currentRole = currentRole,
+                        isStartupVideoEnabled = isStartupVideoEnabled,
+                        onToggleStartupVideo = { isEnabled ->
+                            repository.setStartupVideoEnabled(isEnabled)
                         },
                         onNavigateToQuran = { selectedTab = AppTab.QURAN },
                         onNavigateToPrayer = { selectedTab = AppTab.PRAYER_TIMES },
