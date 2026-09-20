@@ -83,6 +83,7 @@ import com.example.ui.theme.Emerald900
 import com.example.ui.theme.Gold300
 import com.example.ui.theme.Gold400
 import com.example.ui.theme.Gold500
+import com.example.util.ChapterScreenshotGenerator
 import com.example.util.FilePickerUtils
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -440,17 +441,104 @@ fun EnhancedPdfDocumentViewerDialog(
                                     contentPreview
                                 } else {
                                     "Assalamu Alaikum wa Rahmatullahi wa Barakatuh.\n\n" +
-                                            "Welcome to '$title' published by Alnoor Islamic Center.\n\n" +
+                                            "Welcome to '$title' published by Alnoor Islami.\n\n" +
                                             "This document is distributed for continuous charity (Sadaqah Jariyah), religious learning, and spiritual reflection."
                                 }
 
-                                Text(
-                                    text = fullText,
-                                    fontSize = (14 + fontSizeDelta).sp,
-                                    lineHeight = (22 + fontSizeDelta).sp,
-                                    color = textThemeColor,
-                                    modifier = Modifier.fillMaxWidth()
-                                )
+                                val textParagraphs = remember(fullText) {
+                                    fullText.split(Regex("(?:\r?\n){2,}")).map { it.trim() }.filter { it.isNotEmpty() }
+                                }
+
+                                textParagraphs.forEach { para ->
+                                    if (para.startsWith("[SCREENSHOT:") || para.startsWith("[اسکرین شاٹ:")) {
+                                        val chapterNum = Regex("""(?:CHAPTER|Chapter|باب)\s*(\d+)""").find(para)?.groupValues?.getOrNull(1)?.toIntOrNull() ?: 1
+                                        val previewBitmap = remember(chapterNum) {
+                                            ChapterScreenshotGenerator.createChapterPreviewBitmap(chapterNum)
+                                        }
+
+                                        Column(
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .padding(vertical = 12.dp)
+                                        ) {
+                                            Row(
+                                                verticalAlignment = Alignment.CenterVertically,
+                                                modifier = Modifier.padding(bottom = 6.dp)
+                                            ) {
+                                                Icon(
+                                                    Icons.Default.Image,
+                                                    contentDescription = "Screenshot Preview",
+                                                    tint = Gold400,
+                                                    modifier = Modifier.size(16.dp)
+                                                )
+                                                Spacer(modifier = Modifier.width(6.dp))
+                                                Text(
+                                                    text = "INTERACTIVE SCREENSHOT PREVIEW",
+                                                    fontWeight = FontWeight.Bold,
+                                                    fontSize = 11.sp,
+                                                    color = Gold400
+                                                )
+                                            }
+
+                                            Card(
+                                                shape = RoundedCornerShape(12.dp),
+                                                colors = CardDefaults.cardColors(containerColor = Color.Black),
+                                                border = androidx.compose.foundation.BorderStroke(1.5.dp, Gold500.copy(alpha = 0.6f)),
+                                                elevation = CardDefaults.cardElevation(4.dp),
+                                                modifier = Modifier.fillMaxWidth()
+                                            ) {
+                                                Image(
+                                                    bitmap = previewBitmap.asImageBitmap(),
+                                                    contentDescription = "Chapter $chapterNum Screenshot Preview",
+                                                    contentScale = ContentScale.FillWidth,
+                                                    modifier = Modifier.fillMaxWidth()
+                                                )
+                                            }
+                                        }
+                                    } else {
+                                        val isChapterHeader = para.startsWith("CHAPTER") || para.startsWith("باب") || (para.startsWith("===") && para.contains("CHAPTER"))
+                                        val isSubHeader = para.startsWith("---") || (para.length < 50 && para.endsWith(":"))
+
+                                        if (isChapterHeader) {
+                                            Spacer(modifier = Modifier.height(14.dp))
+                                            Surface(
+                                                color = Gold500.copy(alpha = 0.15f),
+                                                shape = RoundedCornerShape(8.dp),
+                                                border = androidx.compose.foundation.BorderStroke(1.dp, Gold500.copy(alpha = 0.4f)),
+                                                modifier = Modifier.fillMaxWidth()
+                                            ) {
+                                                Text(
+                                                    text = para,
+                                                    fontWeight = FontWeight.ExtraBold,
+                                                    fontSize = (16 + fontSizeDelta).sp,
+                                                    color = if (readingTheme == "Emerald Night") Gold300 else Emerald900,
+                                                    modifier = Modifier.padding(10.dp)
+                                                )
+                                            }
+                                            Spacer(modifier = Modifier.height(8.dp))
+                                        } else if (isSubHeader) {
+                                            Text(
+                                                text = para,
+                                                fontWeight = FontWeight.Bold,
+                                                fontSize = (14 + fontSizeDelta).sp,
+                                                color = if (readingTheme == "Emerald Night") Gold400 else Emerald800,
+                                                modifier = Modifier
+                                                    .fillMaxWidth()
+                                                    .padding(vertical = 4.dp)
+                                            )
+                                        } else {
+                                            Text(
+                                                text = para,
+                                                fontSize = (14 + fontSizeDelta).sp,
+                                                lineHeight = (22 + fontSizeDelta).sp,
+                                                color = textThemeColor,
+                                                modifier = Modifier
+                                                    .fillMaxWidth()
+                                                    .padding(vertical = 4.dp)
+                                            )
+                                        }
+                                    }
+                                }
 
                                 Spacer(modifier = Modifier.height(20.dp))
                                 Surface(

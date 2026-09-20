@@ -214,7 +214,7 @@ fun AppSettingsScreen(
                             border = BorderStroke(1.dp, Gold500.copy(alpha = 0.5f))
                         ) {
                             Text(
-                                text = "v3.2 • PDF",
+                                text = "English + اردو • Screenshots",
                                 style = MaterialTheme.typography.labelSmall,
                                 fontWeight = FontWeight.Bold,
                                 color = Gold600,
@@ -226,7 +226,7 @@ fun AppSettingsScreen(
                     Spacer(modifier = Modifier.height(10.dp))
 
                     Text(
-                        text = "Read the comprehensive, step-by-step user manual covering Live Broadcasts, Prayer Times, Quran Majeed, Khatam Sharif, Digital Library, Donations, and Support. Works 100% offline with built-in viewer and PDF export.",
+                        text = "Complete dual-language (English & Urdu) user manual with UI screenshots for every chapter. Covers Live Broadcasts, Prayer Times, Quran Majeed, Khatam Sharif, Library, Donations, and Support. Works 100% offline with built-in viewer and PDF export.",
                         style = MaterialTheme.typography.bodySmall,
                         fontSize = 12.sp,
                         lineHeight = 18.sp,

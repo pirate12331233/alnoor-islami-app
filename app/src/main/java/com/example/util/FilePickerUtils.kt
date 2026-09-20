@@ -9,6 +9,7 @@ import android.graphics.BitmapFactory
 import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Paint
+import android.graphics.RectF
 import android.graphics.Typeface
 import android.graphics.pdf.PdfDocument
 import android.graphics.pdf.PdfRenderer
@@ -659,9 +660,9 @@ object FilePickerUtils {
             contentPreview
         } else {
             "Assalamu Alaikum wa Rahmatullahi wa Barakatuh.\n\n" +
-                    "This official document is published by Alnoor Islamic Center for community education, spiritual guidance, and scholarly reference.\n\n" +
+                    "This official document is published by Alnoor Islami for community education, spiritual guidance, and scholarly reference.\n\n" +
                     "Recite Darood Sharif abundantly: 'Allahumma Salli Ala Sayyidina Muhammadin wa Ala Aali Sayyidina Muhammadin wa Barik wa Sallim.'\n\n" +
-                    "For inquiries or full hard-copy publication requests, please contact Alnoor Mosque Administration."
+                    "For inquiries or full hard-copy publication requests, please contact Alnoor Islami Administration."
         }
 
         val contentLabelPaint = TextPaint().apply {
@@ -692,7 +693,7 @@ object FilePickerUtils {
 
         val drawPageFooter = { canvas: Canvas, pageNum: Int ->
             canvas.drawText(
-                "Alnoor Islamic Center  •  Official Publication Document  •  Page $pageNum",
+                "Alnoor Islami  •  Official Publication Document  •  Page $pageNum",
                 (pageWidth / 2).toFloat(),
                 (pageHeight - 30).toFloat(),
                 footerPaint
@@ -704,8 +705,68 @@ object FilePickerUtils {
             val trimmed = para.trim()
             if (trimmed.isEmpty()) continue
 
+            // Check if this paragraph is a screenshot marker
+            if (trimmed.startsWith("[SCREENSHOT:") || trimmed.startsWith("[اسکرین شاٹ:")) {
+                val chapterNum = Regex("""(?:CHAPTER|Chapter|باب)\s*(\d+)""").find(trimmed)?.groupValues?.getOrNull(1)?.toIntOrNull() ?: 1
+                val previewBmp = ChapterScreenshotGenerator.createChapterPreviewBitmap(chapterNum)
+
+                // Dimensions for diagram on PDF page (scaled to width: pageWidth - 80)
+                val targetW = (pageWidth - 80).toFloat()
+                val targetH = targetW * (previewBmp.height.toFloat() / previewBmp.width.toFloat())
+
+                // Check page space
+                if (currentY + targetH + 30f > pageHeight - 55f) {
+                    drawPageFooter(currentCanvas, pageNumber)
+                    pdfDocument.finishPage(currentPage)
+
+                    pageNumber++
+                    val newPageInfo = PdfDocument.PageInfo.Builder(pageWidth, pageHeight, pageNumber).create()
+                    currentPage = pdfDocument.startPage(newPageInfo)
+                    currentCanvas = currentPage.canvas
+
+                    currentCanvas.drawRect(0f, 0f, pageWidth.toFloat(), pageHeight.toFloat(), bgPaint)
+
+                    val runningHeaderPaint = Paint().apply { color = Color.rgb(6, 78, 59) }
+                    currentCanvas.drawRect(0f, 0f, pageWidth.toFloat(), 36f, runningHeaderPaint)
+
+                    val runningTextPaint = TextPaint().apply {
+                        color = Color.rgb(253, 230, 138)
+                        textSize = 10f
+                        typeface = Typeface.create(Typeface.SANS_SERIF, Typeface.BOLD)
+                        isAntiAlias = true
+                    }
+                    currentCanvas.drawText("ALNOOR ISLAMI COMMUNITY APP  •  OFFICIAL PUBLICATION", 40f, 22f, runningTextPaint)
+
+                    val runningTitlePaint = TextPaint().apply {
+                        color = Color.WHITE
+                        textSize = 9.5f
+                        textAlign = Paint.Align.RIGHT
+                        isAntiAlias = true
+                    }
+                    val shortTitle = if (title.length > 30) title.take(28) + "..." else title
+                    currentCanvas.drawText(shortTitle, (pageWidth - 40).toFloat(), 22f, runningTitlePaint)
+
+                    currentY = 56f
+                }
+
+                // Label for diagram
+                val labelPaint = TextPaint().apply {
+                    color = Color.rgb(180, 83, 9)
+                    textSize = 10.5f
+                    typeface = Typeface.create(Typeface.SANS_SERIF, Typeface.BOLD)
+                    isAntiAlias = true
+                }
+                currentCanvas.drawText("📱 SCREENSHOT PREVIEW DIAGRAM", 40f, currentY + 12f, labelPaint)
+                currentY += 20f
+
+                val destRect = RectF(40f, currentY, 40f + targetW, currentY + targetH)
+                currentCanvas.drawBitmap(previewBmp, null, destRect, Paint(Paint.FILTER_BITMAP_FLAG))
+                currentY += targetH + 18f
+                continue
+            }
+
             // Determine if this paragraph is a chapter header or subheader
-            val isHeader = trimmed.startsWith("CHAPTER") || trimmed.startsWith("===") || trimmed.startsWith("---") || (trimmed.length < 50 && trimmed.endsWith(":"))
+            val isHeader = trimmed.startsWith("CHAPTER") || trimmed.startsWith("===") || trimmed.startsWith("---") || trimmed.startsWith("باب") || (trimmed.length < 50 && trimmed.endsWith(":"))
             val paintToUse = if (isHeader) {
                 TextPaint().apply {
                     color = Color.rgb(6, 78, 59)
