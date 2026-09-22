@@ -708,7 +708,7 @@ fun AppSettingsScreen(
                                     }
                                     Spacer(modifier = Modifier.height(2.dp))
                                     Text(
-                                        text = if (isStartupVideoEnabled) "10s Intro animation plays on app launch" else "Intro animation disabled (direct to dashboard)",
+                                        text = if (isStartupVideoEnabled) "5s Intro animation plays on app launch" else "Intro animation disabled (direct to dashboard)",
                                         style = MaterialTheme.typography.bodySmall,
                                         fontSize = 11.5.sp,
                                         color = MaterialTheme.colorScheme.onSurfaceVariant

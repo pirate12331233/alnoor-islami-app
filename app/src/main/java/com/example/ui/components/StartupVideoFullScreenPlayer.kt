@@ -14,7 +14,6 @@ import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -32,9 +31,6 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AutoAwesome
-import androidx.compose.material.icons.filled.FastForward
-import androidx.compose.material.icons.filled.VolumeMute
-import androidx.compose.material.icons.filled.VolumeUp
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.Surface
@@ -78,20 +74,19 @@ fun StartupVideoFullScreenPlayer(
     onFinished: () -> Unit
 ) {
     val context = LocalContext.current
-    val totalSeconds = 10
+    val totalSeconds = 5
     var remainingSeconds by remember { mutableIntStateOf(totalSeconds) }
     var progress by remember { mutableFloatStateOf(0f) }
-    var isMuted by remember { mutableStateOf(false) }
     var isVideoReady by remember { mutableStateOf(false) }
     var isVideoError by remember { mutableStateOf(false) }
     var mediaPlayerRef by remember { mutableStateOf<MediaPlayer?>(null) }
 
-    // Intercept back button to skip intro
-    BackHandler {
-        onFinished()
+    // Disable back button skipping during 5-second intro
+    BackHandler(enabled = true) {
+        // No-op: user cannot skip or dismiss early via back button
     }
 
-    // Permanent 10-second startup countdown
+    // Fixed 5-second startup countdown
     LaunchedEffect(Unit) {
         val intervalMs = 100L
         val totalSteps = (totalSeconds * 1000L / intervalMs).toFloat()
@@ -104,7 +99,7 @@ fun StartupVideoFullScreenPlayer(
             remainingSeconds = (totalSeconds - (currentStep * intervalMs / 1000)).toInt().coerceAtLeast(0)
         }
 
-        delay(200)
+        delay(150)
         onFinished()
     }
 
@@ -145,17 +140,13 @@ fun StartupVideoFullScreenPlayer(
                         FrameLayout.LayoutParams.MATCH_PARENT,
                         Gravity.CENTER
                     )
-                    val rawResourceUri = Uri.parse("android.resource://${ctx.packageName}/raw/app_startup_video")
+                    val rawResourceUri = Uri.parse("android.resource://${ctx.packageName}/${com.example.R.raw.app_startup_video}")
                     setVideoURI(rawResourceUri)
 
                     setOnPreparedListener { mp ->
                         mediaPlayerRef = mp
                         mp.isLooping = false
-                        if (isMuted) {
-                            mp.setVolume(0f, 0f)
-                        } else {
-                            mp.setVolume(1f, 1f)
-                        }
+                        mp.setVolume(1f, 1f)
                         isVideoReady = true
                         mp.start()
                     }
@@ -171,17 +162,7 @@ fun StartupVideoFullScreenPlayer(
                     }
                 }
             },
-            update = {
-                mediaPlayerRef?.let { mp ->
-                    try {
-                        if (isMuted) {
-                            mp.setVolume(0f, 0f)
-                        } else {
-                            mp.setVolume(1f, 1f)
-                        }
-                    } catch (_: Exception) {}
-                }
-            },
+            update = {},
             modifier = Modifier.fillMaxSize()
         )
 
@@ -300,7 +281,7 @@ fun StartupVideoFullScreenPlayer(
                                 )
                                 Spacer(modifier = Modifier.width(6.dp))
                                 Text(
-                                    text = "10-Second Welcome Sequence",
+                                    text = "Alnoor Islami Welcome",
                                     color = Gold300,
                                     fontSize = 11.sp,
                                     fontWeight = FontWeight.SemiBold
@@ -311,108 +292,15 @@ fun StartupVideoFullScreenPlayer(
                 }
             }
 
-            // Top Bar Overlay (Skip, Mute, Watermark)
+            // Bottom hairline progress indicator (non-intrusive, so video animation is 100% visible)
             Column(
                 modifier = Modifier
                     .fillMaxSize()
                     .statusBarsPadding()
                     .navigationBarsPadding()
                     .padding(horizontal = 20.dp, vertical = 16.dp),
-                verticalArrangement = Arrangement.SpaceBetween
+                verticalArrangement = Arrangement.Bottom
             ) {
-                // Top Header Row
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    // Watermark badge
-                    Surface(
-                        shape = RoundedCornerShape(20.dp),
-                        color = Emerald900.copy(alpha = 0.85f),
-                        border = androidx.compose.foundation.BorderStroke(1.dp, Gold500.copy(alpha = 0.5f))
-                    ) {
-                        Row(
-                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.AutoAwesome,
-                                contentDescription = null,
-                                tint = Gold400,
-                                modifier = Modifier.size(14.dp)
-                            )
-                            Spacer(modifier = Modifier.width(6.dp))
-                            Text(
-                                text = "Alnoor Islami",
-                                fontSize = 11.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = Gold300
-                            )
-                        }
-                    }
-
-                    // Audio Mute & Skip Actions
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(10.dp)
-                    ) {
-                        // Sound Toggle
-                        Surface(
-                            shape = CircleShape,
-                            color = Color.Black.copy(alpha = 0.6f),
-                            modifier = Modifier
-                                .size(40.dp)
-                                .clickable {
-                                    isMuted = !isMuted
-                                    mediaPlayerRef?.let { mp ->
-                                        try {
-                                            if (isMuted) mp.setVolume(0f, 0f) else mp.setVolume(1f, 1f)
-                                        } catch (_: Exception) {}
-                                    }
-                                }
-                        ) {
-                            Box(contentAlignment = Alignment.Center) {
-                                Icon(
-                                    imageVector = if (isMuted) Icons.Default.VolumeMute else Icons.Default.VolumeUp,
-                                    contentDescription = "Toggle Mute",
-                                    tint = Gold400,
-                                    modifier = Modifier.size(20.dp)
-                                )
-                            }
-                        }
-
-                        // Skip Button with remaining seconds counter
-                        Surface(
-                            shape = RoundedCornerShape(20.dp),
-                            color = Gold500,
-                            modifier = Modifier
-                                .clickable { onFinished() }
-                                .testTag("skip_startup_video_button")
-                        ) {
-                            Row(
-                                modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Text(
-                                    text = "Skip (${remainingSeconds}s)",
-                                    fontSize = 12.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    color = Emerald900
-                                )
-                                Spacer(modifier = Modifier.width(4.dp))
-                                Icon(
-                                    imageVector = Icons.Default.FastForward,
-                                    contentDescription = null,
-                                    tint = Emerald900,
-                                    modifier = Modifier.size(16.dp)
-                                )
-                            }
-                        }
-                    }
-                }
-
-                // Bottom hairline progress indicator (non-intrusive, so video animation is 100% visible)
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
