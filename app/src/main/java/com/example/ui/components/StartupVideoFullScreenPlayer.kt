@@ -131,43 +131,50 @@ fun StartupVideoFullScreenPlayer(
             .testTag("startup_video_player_screen"),
         contentAlignment = Alignment.Center
     ) {
-        // Built-in Video Player layer for compiled raw resource
-        AndroidView(
-            factory = { ctx ->
-                VideoView(ctx).apply {
-                    layoutParams = FrameLayout.LayoutParams(
-                        FrameLayout.LayoutParams.MATCH_PARENT,
-                        FrameLayout.LayoutParams.MATCH_PARENT,
-                        Gravity.CENTER
-                    )
-                    val rawResourceUri = Uri.parse("android.resource://${ctx.packageName}/${com.example.R.raw.app_startup_video}")
-                    setVideoURI(rawResourceUri)
+        // Dynamically resolve raw resource if present, avoiding compilation errors if the file is absent
+        val rawResId = remember {
+            context.resources.getIdentifier("app_startup_video", "raw", context.packageName)
+        }
 
-                    setOnPreparedListener { mp ->
-                        mediaPlayerRef = mp
-                        mp.isLooping = false
-                        mp.setVolume(1f, 1f)
-                        isVideoReady = true
-                        mp.start()
+        // Built-in Video Player layer if raw resource exists
+        if (rawResId != 0) {
+            AndroidView(
+                factory = { ctx ->
+                    VideoView(ctx).apply {
+                        layoutParams = FrameLayout.LayoutParams(
+                            FrameLayout.LayoutParams.MATCH_PARENT,
+                            FrameLayout.LayoutParams.MATCH_PARENT,
+                            Gravity.CENTER
+                        )
+                        val rawResourceUri = Uri.parse("android.resource://${ctx.packageName}/$rawResId")
+                        setVideoURI(rawResourceUri)
+
+                        setOnPreparedListener { mp ->
+                            mediaPlayerRef = mp
+                            mp.isLooping = false
+                            mp.setVolume(1f, 1f)
+                            isVideoReady = true
+                            mp.start()
+                        }
+
+                        setOnCompletionListener {
+                            onFinished()
+                        }
+
+                        setOnErrorListener { _, _, _ ->
+                            isVideoError = true
+                            isVideoReady = true
+                            true
+                        }
                     }
+                },
+                update = {},
+                modifier = Modifier.fillMaxSize()
+            )
+        }
 
-                    setOnCompletionListener {
-                        onFinished()
-                    }
-
-                    setOnErrorListener { _, _, _ ->
-                        isVideoError = true
-                        isVideoReady = true
-                        true
-                    }
-                }
-            },
-            update = {},
-            modifier = Modifier.fillMaxSize()
-        )
-
-            // Permanent 10-Second Animated Islamic Logo Video Sequence
-            if (isVideoError || !isVideoReady) {
+        // Animated Islamic Logo Welcome Sequence (shown if no video file, loading, or video error)
+        if (rawResId == 0 || isVideoError || !isVideoReady) {
                 Box(
                     modifier = Modifier
                         .fillMaxSize()
