@@ -297,6 +297,8 @@ fun MessagesScreen(
             inquiries = inquiries,
             onSendChatMessage = onSendChatMessage,
             onSubmitInquiry = onSubmitInquiry,
+            onMarkAsRead = onMarkAsRead,
+            onMarkThreadRead = onMarkThreadRead,
             onAdminLoginPrompt = onNavigateToAuth,
             modifier = modifier
         )
@@ -315,6 +317,8 @@ fun UserWhatsAppChatView(
     inquiries: List<AdminMessage>,
     onSendChatMessage: (threadId: String, senderName: String, senderContact: String, text: String, isFromAdmin: Boolean, category: MessageCategory) -> Unit,
     onSubmitInquiry: (AdminMessage) -> Unit,
+    onMarkAsRead: (String, Boolean) -> Unit = { _, _ -> },
+    onMarkThreadRead: (String, String) -> Unit = { _, _ -> },
     onAdminLoginPrompt: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
@@ -376,6 +380,13 @@ fun UserWhatsAppChatView(
 
     val chatBubbles = buildChatBubbles(userMessages)
 
+    // Effective threadId for this user
+    val effectiveThreadId = if (normalizedContactKey.isNotBlank()) {
+        "contact_$normalizedContactKey"
+    } else {
+        deviceThreadId
+    }
+
     // Auto-scroll to bottom on new messages
     LaunchedEffect(chatBubbles.size) {
         if (chatBubbles.isNotEmpty()) {
@@ -383,11 +394,17 @@ fun UserWhatsAppChatView(
         }
     }
 
-    // Effective threadId for this user
-    val effectiveThreadId = if (normalizedContactKey.isNotBlank()) {
-        "contact_$normalizedContactKey"
-    } else {
-        deviceThreadId
+    // Auto-mark incoming user messages and flash broadcasts as read when viewing this chat
+    LaunchedEffect(userMessages) {
+        val unreadIncoming = userMessages.filter { !it.isRead && (it.isFromAdmin || it.threadId == "FLASH_BROADCAST" || it.adminReply != null) }
+        if (unreadIncoming.isNotEmpty()) {
+            unreadIncoming.forEach { msg ->
+                onMarkAsRead(msg.id, true)
+            }
+            if (effectiveThreadId.isNotBlank()) {
+                onMarkThreadRead(effectiveThreadId, savedContact)
+            }
+        }
     }
 
     Column(
@@ -1481,6 +1498,12 @@ fun AdminOneToOneChatView(
     LaunchedEffect(chatBubbles.size) {
         if (chatBubbles.isNotEmpty()) {
             listState.animateScrollToItem(chatBubbles.size - 1)
+        }
+    }
+
+    LaunchedEffect(thread.threadId, thread.messages) {
+        if (thread.unreadCount > 0) {
+            onMarkAsRead()
         }
     }
 

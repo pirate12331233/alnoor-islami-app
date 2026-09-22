@@ -293,6 +293,7 @@ class FirestoreSyncManager private constructor() {
 
                         // 2. Store in user's 1-to-1 helpline chat history with date/time stamp
                         try {
+                            val isReadLocally = com.example.util.ReadStatusTracker.isRead(context, alertId)
                             db.inquiriesDao().insertInquiry(
                                 UserInquiryEntity(
                                     id = alertId,
@@ -304,7 +305,7 @@ class FirestoreSyncManager private constructor() {
                                     timestamp = formattedTimestamp,
                                     status = "RESOLVED",
                                     reply = null,
-                                    isRead = false,
+                                    isRead = isReadLocally,
                                     internalNotes = "Urgent Broadcast to All Community Devices",
                                     isFromAdmin = true,
                                     threadId = "FLASH_BROADCAST",
@@ -759,6 +760,7 @@ class FirestoreSyncManager private constructor() {
 
                         // Always save into helpline database so it's archived in 1-to-1 chat history
                         try {
+                            val isReadLocally = context?.let { ctx -> com.example.util.ReadStatusTracker.isRead(ctx, alertId) } ?: false
                             db.inquiriesDao().insertInquiry(
                                 UserInquiryEntity(
                                     id = alertId,
@@ -770,7 +772,7 @@ class FirestoreSyncManager private constructor() {
                                     timestamp = formattedTimestamp,
                                     status = "RESOLVED",
                                     reply = null,
-                                    isRead = false,
+                                    isRead = isReadLocally,
                                     internalNotes = "Urgent Broadcast to All Community Devices",
                                     isFromAdmin = true,
                                     threadId = "FLASH_BROADCAST",
@@ -1080,6 +1082,9 @@ class FirestoreSyncManager private constructor() {
                         )
                         val timestamp = getLongValue(fields, "timestamp", System.currentTimeMillis())
 
+                        val isReadLocally = com.example.AlnoorApp.instance?.let { ctx ->
+                            com.example.util.ReadStatusTracker.isRead(ctx, alertId)
+                        } ?: false
                         val flashInquiry = UserInquiryEntity(
                             id = alertId,
                             senderName = "Alnoor Mosque Administration",
@@ -1090,7 +1095,7 @@ class FirestoreSyncManager private constructor() {
                             timestamp = formattedTimestamp,
                             status = "RESOLVED",
                             reply = null,
-                            isRead = false,
+                            isRead = isReadLocally,
                             internalNotes = "Urgent Broadcast to All Community Devices",
                             isFromAdmin = true,
                             threadId = "FLASH_BROADCAST",
@@ -1110,7 +1115,7 @@ class FirestoreSyncManager private constructor() {
                                 put("timestamp", stringField(formattedTimestamp))
                                 put("status", stringField("RESOLVED"))
                                 put("reply", stringField(""))
-                                put("isRead", booleanField(false))
+                                put("isRead", booleanField(isReadLocally))
                                 put("internalNotes", stringField("Broadcast Flash Message to All Community Devices"))
                                 put("isFromAdmin", booleanField(true))
                                 put("threadId", stringField("FLASH_BROADCAST"))
@@ -1598,6 +1603,44 @@ class FirestoreSyncManager private constructor() {
         }
     }
 
+    fun updateInquiryReadStatusInCloud(messageId: String, isRead: Boolean, scope: CoroutineScope) {
+        scope.launch(Dispatchers.IO) {
+            try {
+                val doc = fetchDocument("user_inquiries", messageId)
+                val fields = doc?.optJSONObject("fields") ?: return@launch
+                fields.put("isRead", booleanField(isRead))
+                saveDocument("user_inquiries", messageId, fields)
+                Log.d(TAG, "Synced read status ($isRead) to Firestore for inquiry: $messageId")
+            } catch (e: Exception) {
+                Log.e(TAG, "Error updating inquiry read status in Firestore: ${e.message}", e)
+            }
+        }
+    }
+
+    fun updateThreadReadStatusInCloud(threadId: String, contact: String, isRead: Boolean, scope: CoroutineScope) {
+        scope.launch(Dispatchers.IO) {
+            try {
+                val remoteInquiries = fetchCollection("user_inquiries")
+                val cleanContact = contact.trim().lowercase().filter { it.isLetterOrDigit() }
+                for (doc in remoteInquiries) {
+                    val fields = doc.optJSONObject("fields") ?: continue
+                    val docThreadId = getStringValue(fields, "threadId", "")
+                    val docContact = getStringValue(fields, "senderContact", "").trim().lowercase().filter { it.isLetterOrDigit() }
+                    val id = getStringValue(fields, "id", "")
+                    val matchesThread = threadId.isNotBlank() && docThreadId == threadId
+                    val matchesContact = cleanContact.isNotBlank() && docContact == cleanContact
+                    if (id.isNotBlank() && (matchesThread || matchesContact)) {
+                        fields.put("isRead", booleanField(isRead))
+                        saveDocument("user_inquiries", id, fields)
+                    }
+                }
+                Log.d(TAG, "Synced thread read status ($isRead) to Firestore for thread: $threadId")
+            } catch (e: Exception) {
+                Log.e(TAG, "Error updating thread read status in Firestore: ${e.message}", e)
+            }
+        }
+    }
+
     fun deleteInquiryFromCloud(messageId: String, scope: CoroutineScope) {
         scope.launch(Dispatchers.IO) {
             try {
@@ -2030,6 +2073,10 @@ class FirestoreSyncManager private constructor() {
         val message = getStringValue(fields, "message")
         if (message.isBlank()) return null
 
+        val isLocallyRead = com.example.AlnoorApp.instance?.let { ctx ->
+            com.example.util.ReadStatusTracker.isRead(ctx, id)
+        } ?: false
+
         return UserInquiryEntity(
             id = id,
             senderName = getStringValue(fields, "senderName", "Community Member"),
@@ -2040,7 +2087,7 @@ class FirestoreSyncManager private constructor() {
             timestamp = getStringValue(fields, "timestamp", "Today"),
             status = getStringValue(fields, "status", "PENDING"),
             reply = getStringValue(fields, "reply").ifBlank { null },
-            isRead = getBooleanValue(fields, "isRead", false),
+            isRead = getBooleanValue(fields, "isRead", false) || isLocallyRead,
             internalNotes = getStringValue(fields, "internalNotes").ifBlank { null },
             isFromAdmin = getBooleanValue(fields, "isFromAdmin", false),
             threadId = getStringValue(fields, "threadId", ""),

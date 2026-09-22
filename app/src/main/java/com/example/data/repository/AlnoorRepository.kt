@@ -700,6 +700,7 @@ class AlnoorRepository private constructor(private val context: Context) {
                 .catch { e -> Log.e("AlnoorRepository", "Error in inquiries flow: ${e.message}", e) }
                 .collectLatest { entities ->
                 val list = entities.map { entity ->
+                    val isLocallyRead = com.example.util.ReadStatusTracker.isRead(context, entity.id)
                     AdminMessage(
                         id = entity.id,
                         senderName = entity.senderName,
@@ -709,7 +710,7 @@ class AlnoorRepository private constructor(private val context: Context) {
                         message = entity.message,
                         timestamp = entity.timestamp,
                         status = try { MessageStatus.valueOf(entity.status) } catch (_: Exception) { MessageStatus.PENDING },
-                        isRead = entity.isRead,
+                        isRead = entity.isRead || isLocallyRead,
                         adminReply = entity.reply,
                         internalNotes = entity.internalNotes,
                         isFromAdmin = entity.isFromAdmin,
@@ -1655,6 +1656,14 @@ class AlnoorRepository private constructor(private val context: Context) {
             createdAt = System.currentTimeMillis()
         )
 
+        // Mark read immediately on the sender device so the sender's own sent message never counts as unread for the sender!
+        com.example.util.ReadStatusTracker.markRead(context, newMessage.id)
+
+        // If Admin is sending a reply in this thread, all previous messages in this thread are marked as read for Admin
+        if (isFromAdmin) {
+            markThreadAsRead(cleanThreadId, senderContact)
+        }
+
         repositoryScope.launch {
             try {
                 db.inquiriesDao().insertInquiry(
@@ -1699,15 +1708,26 @@ class AlnoorRepository private constructor(private val context: Context) {
     }
 
     fun markMessageRead(messageId: String, isRead: Boolean) {
+        if (isRead) {
+            com.example.util.ReadStatusTracker.markRead(context, messageId)
+        }
         repositoryScope.launch {
             db.inquiriesDao().updateReadStatus(messageId, isRead)
         }
+        firestoreSync.updateInquiryReadStatusInCloud(messageId, isRead, repositoryScope)
     }
 
     fun markThreadAsRead(threadId: String, contact: String) {
         repositoryScope.launch {
+            val matchingMsgs = _messages.value.filter {
+                (threadId.isNotBlank() && it.threadId == threadId) ||
+                (contact.isNotBlank() && it.senderContact == contact)
+            }
+            val ids = matchingMsgs.map { it.id }
+            com.example.util.ReadStatusTracker.markMultipleRead(context, ids)
             db.inquiriesDao().updateThreadReadStatus(threadId, contact, true)
         }
+        firestoreSync.updateThreadReadStatusInCloud(threadId, contact, true, repositoryScope)
     }
 
     fun saveMessageInternalNotes(messageId: String, notes: String) {
@@ -1731,6 +1751,8 @@ class AlnoorRepository private constructor(private val context: Context) {
                 subject = "Re: ${current.subject}"
             )
         }
+
+        markMessageRead(messageId, true)
 
         repositoryScope.launch {
             db.inquiriesDao().updateReply(messageId, MessageStatus.RESOLVED.name, replyText)

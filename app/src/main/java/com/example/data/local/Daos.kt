@@ -101,12 +101,36 @@ interface InquiriesDao {
     @Query("DELETE FROM user_inquiries WHERE threadId = :threadId OR senderContact = :contact")
     suspend fun deleteThread(threadId: String, contact: String)
 
+    @Query("SELECT * FROM user_inquiries")
+    suspend fun getAllInquiriesSync(): List<UserInquiryEntity>
+
+    @Query("DELETE FROM user_inquiries WHERE id IN (:ids)")
+    suspend fun deleteInquiriesByIds(ids: List<String>)
+
     @androidx.room.Transaction
     suspend fun syncInquiriesWithCloud(inquiries: List<UserInquiryEntity>) {
-        clearAll()
-        if (inquiries.isNotEmpty()) {
-            insertInquiriesReplacing(inquiries)
+        if (inquiries.isEmpty()) return
+        val existingList = getAllInquiriesSync()
+        val existingMap = existingList.associateBy { it.id }
+        val readIds = com.example.AlnoorApp.instance?.let { com.example.util.ReadStatusTracker.getReadIds(it) } ?: emptySet()
+
+        val mergedList = inquiries.map { incoming ->
+            val existing = existingMap[incoming.id]
+            val isLocallyRead = (existing?.isRead == true) || (incoming.id in readIds)
+            val effectiveRead = incoming.isRead || isLocallyRead
+            incoming.copy(
+                isRead = effectiveRead,
+                internalNotes = incoming.internalNotes ?: existing?.internalNotes
+            )
         }
+
+        val incomingIds = inquiries.map { it.id }.toSet()
+        val idsToDelete = existingList.filter { it.id !in incomingIds && !it.id.startsWith("local_") }.map { it.id }
+        if (idsToDelete.isNotEmpty()) {
+            deleteInquiriesByIds(idsToDelete)
+        }
+
+        insertInquiriesReplacing(mergedList)
     }
 }
 

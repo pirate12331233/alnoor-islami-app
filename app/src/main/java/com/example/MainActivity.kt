@@ -2,6 +2,7 @@ package com.example
 
 import android.Manifest
 import android.app.Activity
+import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Build
@@ -186,11 +187,37 @@ fun AlnoorAppMainScreen(
     val notices by repository.notices.collectAsState()
     val importantNoticePopup by repository.importantNoticePopup.collectAsState()
     val messages by repository.messages.collectAsState()
-    val unreadMessagesCount = remember(messages, currentRole) {
+    val unreadMessagesCount = remember(messages, currentRole, authUserState) {
         if (currentRole == UserRole.ADMIN) {
             messages.count { !it.isFromAdmin && !it.isRead }
         } else {
-            messages.count { it.isFromAdmin && !it.isRead }
+            val userEmail = authUserState.email?.trim()?.lowercase() ?: ""
+            val userName = authUserState.displayName?.trim()?.lowercase() ?: ""
+            val inqPrefs = context.getSharedPreferences("alnoor_user_inquiries_prefs", Context.MODE_PRIVATE)
+            val authPrefs = context.getSharedPreferences("alnoor_auth_security_prefs", Context.MODE_PRIVATE)
+            val savedSessionEmail = authPrefs.getString("saved_user_email", "")?.trim()?.lowercase() ?: ""
+            val savedSessionName = authPrefs.getString("saved_user_name", "")?.trim()?.lowercase() ?: ""
+
+            val effectiveEmail = userEmail.ifBlank { savedSessionEmail }
+            val effectiveName = userName.ifBlank { savedSessionName }
+            val deviceThreadId = inqPrefs.getString("user_device_thread_id", "") ?: ""
+            val sentIds = inqPrefs.getStringSet("sent_inquiry_ids", emptySet()) ?: emptySet()
+            val normEmail = effectiveEmail.filter { it.isLetterOrDigit() }
+            val normName = effectiveName.filter { it.isLetterOrDigit() }
+
+            messages.count { msg ->
+                val isFlash = msg.threadId == "FLASH_BROADCAST" || msg.subject.contains("FLASH", ignoreCase = true)
+                val msgContact = msg.senderContact.trim().lowercase().filter { it.isLetterOrDigit() }
+                val msgName = msg.senderName.trim().lowercase().filter { it.isLetterOrDigit() }
+
+                val belongsToUser = isFlash ||
+                        sentIds.contains(msg.id) ||
+                        (msg.threadId.isNotBlank() && (msg.threadId == deviceThreadId || (normEmail.isNotBlank() && msg.threadId == "contact_$normEmail"))) ||
+                        (normEmail.isNotBlank() && (msgContact == normEmail || msgContact.contains(normEmail))) ||
+                        (normName.isNotBlank() && msgName == normName && normName != "communitymember")
+
+                belongsToUser && (msg.isFromAdmin || isFlash) && !msg.isRead
+            }
         }
     }
     val daroodState by repository.daroodState.collectAsState()
