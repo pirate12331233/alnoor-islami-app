@@ -133,7 +133,7 @@ object NotificationHelper {
                 .setVibrate(vibrationPattern)
                 .setDefaults(NotificationCompat.DEFAULT_LIGHTS or NotificationCompat.DEFAULT_VIBRATE)
                 .setAutoCancel(true)
-                .setFullScreenIntent(pendingIntent, false) // Enables heads-up popup over locked or active screen
+                .setFullScreenIntent(pendingIntent, true) // Enables heads-up popup over locked or active screen
                 .setContentIntent(pendingIntent)
                 .apply {
                     if (appLogoBitmap != null) {

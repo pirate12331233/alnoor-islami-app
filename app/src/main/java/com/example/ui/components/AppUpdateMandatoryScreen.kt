@@ -301,33 +301,6 @@ fun AppUpdateMandatoryScreen(
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Column {
                             Text(
-                                text = "CURRENT",
-                                fontSize = 10.sp,
-                                fontWeight = FontWeight.SemiBold,
-                                color = Color.White.copy(alpha = 0.5f),
-                                letterSpacing = 0.5.sp
-                            )
-                            Text(
-                                text = "Build $currentVersionCode",
-                                style = MaterialTheme.typography.titleMedium,
-                                fontWeight = FontWeight.Bold,
-                                color = Color.White.copy(alpha = 0.85f)
-                            )
-                        }
-
-                        Spacer(modifier = Modifier.width(12.dp))
-
-                        Icon(
-                            imageVector = Icons.Default.ArrowForward,
-                            contentDescription = null,
-                            tint = Gold400,
-                            modifier = Modifier.size(18.dp)
-                        )
-
-                        Spacer(modifier = Modifier.width(12.dp))
-
-                        Column {
-                            Text(
                                 text = "BUILD NO.",
                                 fontSize = 10.sp,
                                 fontWeight = FontWeight.SemiBold,
@@ -339,6 +312,33 @@ fun AppUpdateMandatoryScreen(
                                 style = MaterialTheme.typography.titleMedium,
                                 fontWeight = FontWeight.Bold,
                                 color = Gold300
+                            )
+                        }
+
+                        Spacer(modifier = Modifier.width(12.dp))
+
+                        Text(
+                            text = "/",
+                            fontSize = 16.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = Color.White.copy(alpha = 0.3f)
+                        )
+
+                        Spacer(modifier = Modifier.width(12.dp))
+
+                        Column {
+                            Text(
+                                text = "CURRENT BUILD",
+                                fontSize = 10.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                color = Color.White.copy(alpha = 0.5f),
+                                letterSpacing = 0.5.sp
+                            )
+                            Text(
+                                text = "$currentVersionCode",
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Bold,
+                                color = Color.White.copy(alpha = 0.85f)
                             )
                         }
                     }

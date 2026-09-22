@@ -29,22 +29,24 @@ class AlnoorApp : Application() {
         // 2. Start high-reliability background sync alarm (operates independently of Google Play Services)
         AlnoorBackgroundSyncReceiver.schedule(this)
 
-        // 3. Gracefully initialize FCM token & subscriptions only if Google Play Services is available
+        // 3. Gracefully initialize FCM token & subscriptions
         CoroutineScope(Dispatchers.IO).launch {
             try {
-                if (isGooglePlayServicesAvailable(this@AlnoorApp)) {
-                    val fcm = FirebaseMessaging.getInstance()
-                    fcm.token.addOnCompleteListener { task ->
-                        if (task.isSuccessful && !task.result.isNullOrBlank()) {
-                            Log.d(TAG, "FCM token retrieved: ${task.result}")
-                            fcm.subscribeToTopic(NotificationHelper.TOPIC_ALL_MEMBERS)
-                        } else {
-                            Log.i(TAG, "FCM registration unavailable in current runtime. Background REST sync active.")
-                        }
+                val fcm = FirebaseMessaging.getInstance()
+                fcm.isAutoInitEnabled = true
+                fcm.token.addOnCompleteListener { task ->
+                    if (task.isSuccessful && !task.result.isNullOrBlank()) {
+                        Log.d(TAG, "FCM token retrieved: ${task.result}")
+                    } else {
+                        Log.i(TAG, "FCM registration pending/deferred. Background REST sync active.")
                     }
-                } else {
-                    Log.i(TAG, "Google Play Services not detected. Background REST sync active.")
                 }
+                fcm.subscribeToTopic(NotificationHelper.TOPIC_ALL_MEMBERS)
+                    .addOnSuccessListener { Log.d(TAG, "Subscribed to ${NotificationHelper.TOPIC_ALL_MEMBERS}") }
+                    .addOnFailureListener { e -> Log.w(TAG, "FCM topic subscription notice: ${e.message}") }
+                fcm.subscribeToTopic(NotificationHelper.TOPIC_COMMUNITY_EVENTS)
+                fcm.subscribeToTopic(NotificationHelper.TOPIC_NOTICES)
+                fcm.subscribeToTopic(NotificationHelper.TOPIC_LIVE_BROADCASTS)
             } catch (e: Exception) {
                 Log.w(TAG, "FCM initialization handled safely: ${e.message}")
             }

@@ -103,34 +103,50 @@ class AlnoorBackgroundSyncReceiver : BroadcastReceiver() {
                     PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
                 )
 
-                val triggerAt = SystemClock.elapsedRealtime() + intervalMs
+                var scheduled = false
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+                    try {
+                        val alarmClockInfo = AlarmManager.AlarmClockInfo(
+                            System.currentTimeMillis() + intervalMs,
+                            pendingIntent
+                        )
+                        alarmManager.setAlarmClock(alarmClockInfo, pendingIntent)
+                        scheduled = true
+                        Log.d(TAG, "Scheduled unthrottled AlarmClock background sync in ${intervalMs / 1000}s.")
+                    } catch (e: Exception) {
+                        Log.w(TAG, "setAlarmClock not permitted, falling back to idle alarm: ${e.message}")
+                    }
+                }
 
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                    if (alarmManager.canScheduleExactAlarms()) {
+                if (!scheduled) {
+                    val triggerAt = SystemClock.elapsedRealtime() + intervalMs
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                        if (alarmManager.canScheduleExactAlarms()) {
+                            alarmManager.setExactAndAllowWhileIdle(
+                                AlarmManager.ELAPSED_REALTIME_WAKEUP,
+                                triggerAt,
+                                pendingIntent
+                            )
+                        } else {
+                            alarmManager.setAndAllowWhileIdle(
+                                AlarmManager.ELAPSED_REALTIME_WAKEUP,
+                                triggerAt,
+                                pendingIntent
+                            )
+                        }
+                    } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
                         alarmManager.setExactAndAllowWhileIdle(
                             AlarmManager.ELAPSED_REALTIME_WAKEUP,
                             triggerAt,
                             pendingIntent
                         )
                     } else {
-                        alarmManager.setAndAllowWhileIdle(
+                        alarmManager.set(
                             AlarmManager.ELAPSED_REALTIME_WAKEUP,
                             triggerAt,
                             pendingIntent
                         )
                     }
-                } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-                    alarmManager.setExactAndAllowWhileIdle(
-                        AlarmManager.ELAPSED_REALTIME_WAKEUP,
-                        triggerAt,
-                        pendingIntent
-                    )
-                } else {
-                    alarmManager.set(
-                        AlarmManager.ELAPSED_REALTIME_WAKEUP,
-                        triggerAt,
-                        pendingIntent
-                    )
                 }
                 Log.d(TAG, "Next background sync alarm scheduled in ${intervalMs / 1000}s.")
             } catch (e: Exception) {
