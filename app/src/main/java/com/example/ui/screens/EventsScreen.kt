@@ -154,37 +154,11 @@ fun EventsScreen(
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Text(
-                                text = "Alnoor Community Events",
+                                text = "Alnoor Islami Mahafils",
                                 style = MaterialTheme.typography.titleLarge,
                                 fontWeight = FontWeight.Bold,
                                 color = Color.White
                             )
-
-                            // Islamic Calendar button for user display
-                            Surface(
-                                shape = RoundedCornerShape(8.dp),
-                                color = Gold500,
-                                modifier = Modifier.clickable { showUserIslamicPicker = true }
-                            ) {
-                                Row(
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Default.NightlightRound,
-                                        contentDescription = "Islamic Calendar",
-                                        tint = Emerald900,
-                                        modifier = Modifier.size(14.dp)
-                                    )
-                                    Spacer(modifier = Modifier.width(4.dp))
-                                    Text(
-                                        text = "Islamic Calendar",
-                                        fontSize = 11.sp,
-                                        fontWeight = FontWeight.Bold,
-                                        color = Emerald900
-                                    )
-                                }
-                            }
                         }
 
                         Spacer(modifier = Modifier.height(10.dp))

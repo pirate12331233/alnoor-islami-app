@@ -308,7 +308,7 @@ fun AppUpdateMandatoryScreen(
                                 letterSpacing = 0.5.sp
                             )
                             Text(
-                                text = "v$currentVersionName",
+                                text = "Build $currentVersionCode",
                                 style = MaterialTheme.typography.titleMedium,
                                 fontWeight = FontWeight.Bold,
                                 color = Color.White.copy(alpha = 0.85f)
@@ -328,14 +328,14 @@ fun AppUpdateMandatoryScreen(
 
                         Column {
                             Text(
-                                text = "LATEST",
+                                text = "BUILD NO.",
                                 fontSize = 10.sp,
                                 fontWeight = FontWeight.SemiBold,
                                 color = Gold400,
                                 letterSpacing = 0.5.sp
                             )
                             Text(
-                                text = "v${versionInfo.latestVersionName}",
+                                text = "${versionInfo.latestVersionCode}",
                                 style = MaterialTheme.typography.titleMedium,
                                 fontWeight = FontWeight.Bold,
                                 color = Gold300
