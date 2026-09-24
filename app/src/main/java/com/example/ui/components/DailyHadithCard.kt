@@ -104,6 +104,7 @@ fun DailyHadithCard(
     var isLoading by remember { mutableStateOf(true) }
     var isSavingImage by remember { mutableStateOf(false) }
     var isSharingImage by remember { mutableStateOf(false) }
+    var isFetchingAnother by remember { mutableStateOf(false) }
     var saveSuccessMessage by remember { mutableStateOf<String?>(null) }
     var activeTab by remember { mutableIntStateOf(0) } // 0 = Both, 1 = Urdu, 2 = English
 
@@ -358,20 +359,34 @@ fun DailyHadithCard(
                                 // Cycle to Next Hadith
                                 IconButton(
                                     onClick = {
-                                        val total = HadithRepository.getTotalHadithCount()
-                                        hadithIndex = (hadithIndex + 1) % total
-                                        hadith = HadithRepository.getHadithByIndex(hadithIndex)
+                                        scope.launch {
+                                            isFetchingAnother = true
+                                            val next = HadithRepository.fetchAnotherHadith(hadith?.id)
+                                            hadith = next
+                                            val idx = HadithRepository.getAllAvailableHadiths().indexOfFirst { it.id == next.id }
+                                            if (idx >= 0) hadithIndex = idx
+                                            isFetchingAnother = false
+                                        }
                                     },
+                                    enabled = !isFetchingAnother,
                                     modifier = Modifier
                                         .size(34.dp)
                                         .testTag("btn_next_hadith")
                                 ) {
-                                    Icon(
-                                        imageVector = Icons.Default.SkipNext,
-                                        contentDescription = "Next Hadith",
-                                        tint = Gold400,
-                                        modifier = Modifier.size(20.dp)
-                                    )
+                                    if (isFetchingAnother) {
+                                        CircularProgressIndicator(
+                                            modifier = Modifier.size(16.dp),
+                                            color = Gold400,
+                                            strokeWidth = 2.dp
+                                        )
+                                    } else {
+                                        Icon(
+                                            imageVector = Icons.Default.SkipNext,
+                                            contentDescription = "Next Hadith",
+                                            tint = Gold400,
+                                            modifier = Modifier.size(20.dp)
+                                        )
+                                    }
                                 }
 
                                 // Copy to Clipboard
@@ -713,24 +728,46 @@ fun DailyHadithCard(
                         ) {
                             TextButton(
                                 onClick = {
-                                    val total = HadithRepository.getTotalHadithCount()
-                                    hadithIndex = (hadithIndex + 1) % total
-                                    hadith = HadithRepository.getHadithByIndex(hadithIndex)
-                                }
+                                    scope.launch {
+                                        isFetchingAnother = true
+                                        val next = HadithRepository.fetchAnotherHadith(hadith?.id)
+                                        hadith = next
+                                        val idx = HadithRepository.getAllAvailableHadiths().indexOfFirst { it.id == next.id }
+                                        if (idx >= 0) hadithIndex = idx
+                                        isFetchingAnother = false
+                                    }
+                                },
+                                enabled = !isFetchingAnother,
+                                modifier = Modifier.testTag("btn_another_hadith")
                             ) {
-                                Icon(
-                                    imageVector = Icons.Default.Refresh,
-                                    contentDescription = null,
-                                    tint = Gold400,
-                                    modifier = Modifier.size(16.dp)
-                                )
-                                Spacer(modifier = Modifier.width(4.dp))
-                                Text(
-                                    text = "Another Hadith",
-                                    color = Gold400,
-                                    fontSize = 12.sp,
-                                    fontWeight = FontWeight.Medium
-                                )
+                                if (isFetchingAnother) {
+                                    CircularProgressIndicator(
+                                        modifier = Modifier.size(14.dp),
+                                        color = Gold400,
+                                        strokeWidth = 2.dp
+                                    )
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                    Text(
+                                        text = "Fetching...",
+                                        color = Gold300,
+                                        fontSize = 12.sp,
+                                        fontWeight = FontWeight.Medium
+                                    )
+                                } else {
+                                    Icon(
+                                        imageVector = Icons.Default.Refresh,
+                                        contentDescription = null,
+                                        tint = Gold400,
+                                        modifier = Modifier.size(16.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(4.dp))
+                                    Text(
+                                        text = "Another Hadith",
+                                        color = Gold400,
+                                        fontSize = 12.sp,
+                                        fontWeight = FontWeight.Medium
+                                    )
+                                }
                             }
 
                             TextButton(
