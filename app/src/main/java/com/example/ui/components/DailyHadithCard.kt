@@ -32,6 +32,7 @@ import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.FormatQuote
 import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.SkipNext
@@ -83,6 +84,7 @@ import com.example.ui.theme.Gold300
 import com.example.ui.theme.Gold400
 import com.example.ui.theme.Gold500
 import com.example.util.HadithImageGenerator
+import com.example.util.HadithMatnExtractor
 import kotlinx.coroutines.launch
 
 /**
@@ -113,6 +115,7 @@ fun DailyHadithCard(
     var selectedBookFilter by remember { mutableStateOf<String?>("all") }
     var saveSuccessMessage by remember { mutableStateOf<String?>(null) }
     var activeTab by remember { mutableIntStateOf(0) } // 0 = Both, 1 = Urdu, 2 = English
+    var showFullSanad by remember { mutableStateOf(false) } // Option 1: Clean Mafhoom vs Full Sanad Toggle
 
     val arrowRotation by animateFloatAsState(
         targetValue = if (isExpanded) 180f else 0f,
@@ -310,6 +313,20 @@ fun DailyHadithCard(
                     } else if (hadith != null) {
                         val current = hadith!!
 
+                        // Smart Matn Extractor: Process clean Matn and Mafhoom
+                        val cleanArabic = remember(current.arabicText) {
+                            HadithMatnExtractor.extractMatnArabic(current.arabicText)
+                        }
+                        val cleanUrdu = remember(current.urduTranslation) {
+                            HadithMatnExtractor.extractMafhoomUrdu(current.urduTranslation)
+                        }
+                        val cleanEnglish = remember(current.englishTranslation) {
+                            HadithMatnExtractor.extractMatnEnglish(current.englishTranslation)
+                        }
+                        val isSanadFiltered = remember(current.arabicText, current.urduTranslation) {
+                            HadithMatnExtractor.hasSeparableSanad(current.arabicText, current.urduTranslation)
+                        }
+
                         // Sub-section Header & Tool Actions Row
                         Row(
                             modifier = Modifier.fillMaxWidth(),
@@ -506,8 +523,39 @@ fun DailyHadithCard(
                                     .fillMaxWidth()
                                     .padding(16.dp)
                             ) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Surface(
+                                        shape = RoundedCornerShape(6.dp),
+                                        color = if (showFullSanad) Gold500.copy(alpha = 0.22f) else Emerald900,
+                                        border = BorderStroke(0.6.dp, Gold400.copy(alpha = 0.4f))
+                                    ) {
+                                        Text(
+                                            text = if (showFullSanad) "الحدیث بسندہ الکامل (Full Sanad & Matn)" else "متنِ مبارک • Core Matn",
+                                            color = Gold300,
+                                            fontSize = 10.5.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
+                                        )
+                                    }
+
+                                    if (!showFullSanad && isSanadFiltered) {
+                                        Text(
+                                            text = "مفہوم / متن نمایاں",
+                                            color = Gold300.copy(alpha = 0.75f),
+                                            fontSize = 10.5.sp,
+                                            fontWeight = FontWeight.Medium
+                                        )
+                                    }
+                                }
+
+                                Spacer(modifier = Modifier.height(10.dp))
+
                                 Text(
-                                    text = current.arabicText,
+                                    text = if (showFullSanad) current.arabicText else cleanArabic,
                                     style = MaterialTheme.typography.titleMedium.copy(
                                         fontSize = 19.sp,
                                         lineHeight = 33.sp
@@ -516,6 +564,60 @@ fun DailyHadithCard(
                                     fontFamily = FontFamily.Serif,
                                     color = Color.White,
                                     modifier = Modifier.fillMaxWidth()
+                                )
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.height(12.dp))
+
+                        // Option 1: Smart Matn Extractor Prominent Toggle
+                        Surface(
+                            shape = RoundedCornerShape(12.dp),
+                            color = if (showFullSanad) Gold500.copy(alpha = 0.16f) else Color(0xFF0C382A),
+                            border = BorderStroke(1.dp, if (showFullSanad) Gold400 else Gold500.copy(alpha = 0.38f)),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(12.dp))
+                                .clickable { showFullSanad = !showFullSanad }
+                                .testTag("btn_toggle_full_sanad")
+                        ) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 14.dp, vertical = 10.dp),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    modifier = Modifier.weight(1f)
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.LibraryBooks,
+                                        contentDescription = null,
+                                        tint = Gold300,
+                                        modifier = Modifier.size(19.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(10.dp))
+                                    Column {
+                                        Text(
+                                            text = if (showFullSanad) "Academic Mode: Full Sanad & Word-by-Word Active" else "View Full Word-by-Word Translation & Sanad",
+                                            fontSize = 12.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            color = Gold300
+                                        )
+                                        Text(
+                                            text = if (showFullSanad) "مکمل اسناد و لفظی ترجمہ فعال ہے (Tap to return to concise Mafhoom)" else "سند کے راویوں اور مکمل تفصیلی لفظی ترجمہ کے لیے کلک کریں",
+                                            fontSize = 10.sp,
+                                            color = Color.White.copy(alpha = 0.8f)
+                                        )
+                                    }
+                                }
+                                Icon(
+                                    imageVector = if (showFullSanad) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
+                                    contentDescription = null,
+                                    tint = Gold400,
+                                    modifier = Modifier.size(20.dp)
                                 )
                             }
                         }
@@ -675,27 +777,40 @@ fun DailyHadithCard(
                                 border = BorderStroke(0.5.dp, Gold500.copy(alpha = 0.22f)),
                                 modifier = Modifier.fillMaxWidth()
                             ) {
-                                Column(modifier = Modifier.padding(12.dp)) {
-                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                Column(modifier = Modifier.padding(14.dp)) {
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
                                         Surface(
                                             shape = RoundedCornerShape(4.dp),
                                             color = Gold500.copy(alpha = 0.25f)
                                         ) {
                                             Text(
-                                                text = "اردو ترجمہ",
+                                                text = if (showFullSanad) "مکمل لفظی اردو ترجمہ" else "اردو مفہوم (Easy Comprehension)",
                                                 color = Gold300,
                                                 fontSize = 11.sp,
                                                 fontWeight = FontWeight.Bold,
                                                 modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
                                             )
                                         }
+
+                                        if (!showFullSanad && isSanadFiltered) {
+                                            Text(
+                                                text = "مفہومِ حدیث (سند فلٹرڈ)",
+                                                color = Gold400.copy(alpha = 0.75f),
+                                                fontSize = 10.sp,
+                                                fontWeight = FontWeight.Medium
+                                            )
+                                        }
                                     }
-                                    Spacer(modifier = Modifier.height(6.dp))
+                                    Spacer(modifier = Modifier.height(8.dp))
                                     Text(
-                                        text = current.urduTranslation,
+                                        text = if (showFullSanad) current.urduTranslation else cleanUrdu,
                                         style = MaterialTheme.typography.bodyMedium.copy(
                                             fontSize = 15.sp,
-                                            lineHeight = 24.sp
+                                            lineHeight = 25.sp
                                         ),
                                         color = Color(0xFFE8F5E9),
                                         textAlign = TextAlign.End,
@@ -717,14 +832,18 @@ fun DailyHadithCard(
                                 border = BorderStroke(0.5.dp, Color.White.copy(alpha = 0.15f)),
                                 modifier = Modifier.fillMaxWidth()
                             ) {
-                                Column(modifier = Modifier.padding(12.dp)) {
-                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                Column(modifier = Modifier.padding(14.dp)) {
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
                                         Surface(
                                             shape = RoundedCornerShape(4.dp),
                                             color = Color.White.copy(alpha = 0.15f)
                                         ) {
                                             Text(
-                                                text = "English Translation",
+                                                text = if (showFullSanad) "Complete Translation & Chain" else "English Meaning (Core Message)",
                                                 color = Color.White,
                                                 fontSize = 10.5.sp,
                                                 fontWeight = FontWeight.Bold,
@@ -732,12 +851,12 @@ fun DailyHadithCard(
                                             )
                                         }
                                     }
-                                    Spacer(modifier = Modifier.height(6.dp))
+                                    Spacer(modifier = Modifier.height(8.dp))
                                     Text(
-                                        text = current.englishTranslation,
+                                        text = if (showFullSanad) current.englishTranslation else cleanEnglish,
                                         style = MaterialTheme.typography.bodyMedium.copy(
                                             fontSize = 13.5.sp,
-                                            lineHeight = 20.sp
+                                            lineHeight = 21.sp
                                         ),
                                         color = Color.White.copy(alpha = 0.92f),
                                         modifier = Modifier.fillMaxWidth()

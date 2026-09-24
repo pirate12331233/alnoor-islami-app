@@ -96,5 +96,22 @@ class HadithRepositoryTest {
         val success = HadithImageGenerator.shareHadithAsImage(context, hadith)
         assertTrue("Hadith image generation and sharing should succeed", success)
     }
+
+    @Test
+    fun testSmartMatnExtractorFiltersSanadChains() {
+        val testArabicWithSanad = "حَدَّثَنَا مُوسَى بْنُ إِسْمَاعِيلَ، قَالَ حَدَّثَنَا أَبُو عَوَانَةَ، قَالَ حَدَّثَنَا مُوسَى بْنُ أَبِي عَائِشَةَ، قَالَ حَدَّثَنَا سَعِيدُ بْنُ جُبَيْرٍ، عَنِ ابْنِ عَبَّاسٍ، قَالَ كَانَ رَسُولُ اللَّهِ صلى الله عليه وسلم يُعَالِجُ مِنَ التَّنْزِيلِ شِدَّةً"
+        val cleanArabic = com.example.util.HadithMatnExtractor.extractMatnArabic(testArabicWithSanad)
+        assertFalse(cleanArabic.startsWith("حَدَّثَنَا مُوسَى"))
+        assertTrue(cleanArabic.contains("رَسُولُ اللَّهِ"))
+
+        val testUrduWithSanad = "موسیٰ بن اسماعیل نے ہم سے حدیث بیان کی، ان کو ابوعوانہ نے خبر دی، ان سے موسیٰ ابن ابی عائشہ نے بیان کی، ان سے سعید بن جبیر نے انہوں نے ابن عباس سے سنا کہ رسول اللہ صلی اللہ علیہ وسلم نے فرمایا اعمال کا دارومدار نیتوں پر ہے۔"
+        val cleanUrdu = com.example.util.HadithMatnExtractor.extractMafhoomUrdu(testUrduWithSanad)
+        assertFalse(cleanUrdu.startsWith("موسیٰ بن اسماعیل نے"))
+        assertTrue(cleanUrdu.contains("رسول اللہ صلی اللہ علیہ وسلم نے فرمایا"))
+
+        val testEnglishWithSanad = "Narrated Said bin Jubair: Ibn Abbas reported that Allah's Messenger (ﷺ) said, 'Actions are judged by motives.'"
+        val cleanEnglish = com.example.util.HadithMatnExtractor.extractMatnEnglish(testEnglishWithSanad)
+        assertFalse(cleanEnglish.startsWith("Narrated Said bin Jubair"))
+    }
 }
 

@@ -29,8 +29,9 @@ import java.io.OutputStream
 object HadithImageGenerator {
 
     /**
-     * Renders a HadithData card into an image Bitmap and saves it to the device's Pictures/AlnoorIslami gallery.
-     * Returns the Uri of the saved image.
+     * Renders a Hadith card into a 9:16 vertical image Bitmap and saves it to the device Gallery.
+     * Contains only Urdu and English translations with dynamic font sizing to properly utilize
+     * the 9:16 vertical space without showing Arabic text.
      */
     suspend fun saveHadithCardAsImage(context: Context, hadith: HadithData): Uri? = withContext(Dispatchers.IO) {
         try {
@@ -43,7 +44,8 @@ object HadithImageGenerator {
     }
 
     /**
-     * Creates and shares the Hadith image directly to WhatsApp/other apps.
+     * Creates and shares the Hadith image (Urdu + English only) to WhatsApp/social media.
+     * Accompanying text also includes only Urdu and English.
      */
     suspend fun shareHadithAsImage(context: Context, hadith: HadithData): Boolean = withContext(Dispatchers.IO) {
         try {
@@ -55,6 +57,9 @@ object HadithImageGenerator {
             bitmap.compress(Bitmap.CompressFormat.PNG, 100, stream)
             stream.close()
 
+            val cleanUrdu = HadithMatnExtractor.extractMafhoomUrdu(hadith.urduTranslation)
+            val cleanEnglish = HadithMatnExtractor.extractMatnEnglish(hadith.englishTranslation)
+
             val contentUri = FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
             val shareIntent = Intent(Intent.ACTION_SEND).apply {
                 type = "image/png"
@@ -62,7 +67,13 @@ object HadithImageGenerator {
                 putExtra(Intent.EXTRA_SUBJECT, "Daily Hadith: ${hadith.book}")
                 putExtra(
                     Intent.EXTRA_TEXT,
-                    "📖 *Daily Hadith - ${hadith.book} (${hadith.reference})*\n\n${hadith.arabicText}\n\n*Urdu:*\n${hadith.urduTranslation}\n\n*English:*\n${hadith.englishTranslation}\n\n_Alnoor International Trust_\nWhatsApp: +92-333-2434114 | Email: info@alnoorislami.pk\n_Shared via Alnoor Islami App_"
+                    "📖 *Daily Hadith - ${hadith.book} (${hadith.reference.ifBlank { "Hadith #${hadith.hadithNumber}" }})*\n\n" +
+                            "*اردو ترجمہ (مفہوم):*\n$cleanUrdu\n\n" +
+                            "*English Translation:*\n$cleanEnglish\n\n" +
+                            "— *Grade:* ${hadith.grade}\n" +
+                            "_Alnoor International Trust_\n" +
+                            "WhatsApp: +92-333-2434114 | Email: info@alnoorislami.pk\n" +
+                            "_Shared via Alnoor Islami App_"
                 )
                 addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
             }
@@ -76,157 +87,195 @@ object HadithImageGenerator {
         }
     }
 
+    /**
+     * Generates a 9:16 aspect ratio vertical image card (1080 x 1920) displaying only Urdu and English.
+     * Features automatic font-size fitting and dynamic vertical spacing to fully utilize
+     * available canvas space regardless of whether the Hadith is short, medium, or long.
+     */
     private fun createHadithBitmap(context: Context, hadith: HadithData): Bitmap {
         val width = 1080
-        val targetHeight = 1920 // Universal 9:16 Vertical Story / Status Standard (1080 x 1920)
-        val horizontalPadding = 76
+        val targetHeight = 1920 // Universal 9:16 Vertical Story standard (1080 x 1920)
+        val horizontalPadding = 80
         val contentWidth = width - (horizontalPadding * 2)
 
-        // Measure text at base 9:16 font scale to determine vertical fitting
-        val baseArabicSize = 54f
-        val baseUrduSize = 44f
-        val baseEnglishSize = 36f
+        // Extract clean Mafhoom / core message for crisp reading
+        val urduText = HadithMatnExtractor.extractMafhoomUrdu(hadith.urduTranslation)
+        val englishText = HadithMatnExtractor.extractMatnEnglish(hadith.englishTranslation)
+
+        // Baseline font sizes
         val baseHeaderSize = 42f
-        val baseSubHeaderSize = 32f
-        val baseLabelSize = 30f
+        val baseSubHeaderSize = 31f
+        val baseLabelSize = 32f
         val baseFooterOrgSize = 32f
         val baseFooterContactSize = 25f
 
-        // Initial measurement pass to see if text requires scaling down for exceptionally long Hadiths
-        val testArabicPaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
-            textSize = baseArabicSize
-            typeface = Typeface.create(Typeface.SERIF, Typeface.BOLD)
-        }
-        val testUrduPaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
-            textSize = baseUrduSize
-            typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
-        }
-        val testEnglishPaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
-            textSize = baseEnglishSize
-            typeface = Typeface.create(Typeface.DEFAULT, Typeface.NORMAL)
+        // Intelligent Auto-fitting algorithm for Urdu and English to fill the 9:16 canvas:
+        // We find the optimal scale factor `scale` such that total content height comfortably
+        // fills between 1000px and 1380px of available space inside the 1920px frame.
+        var bestScale = 1.0f
+        var bestUrduSize = 48f
+        var bestEnglishSize = 38f
+
+        // Target content height inside the 9:16 canvas: ~1100f
+        // Test scale range from 0.65f (very long hadith) up to 1.55f (short hadith)
+        var lowScale = 0.65f
+        var highScale = 1.55f
+        val fixedOverhead = 480f // Top header + book title + labels + dividers + footer
+
+        for (step in 0..7) {
+            val midScale = (lowScale + highScale) / 2f
+            val testUrduPaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
+                textSize = 48f * midScale
+                typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
+            }
+            val testEnglishPaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
+                textSize = 38f * midScale
+                typeface = Typeface.create(Typeface.DEFAULT, Typeface.NORMAL)
+            }
+
+            val testUrduLayout = createStaticLayout(urduText, testUrduPaint, contentWidth, Layout.Alignment.ALIGN_NORMAL, 8f * midScale, 1.35f)
+            val testEnglishLayout = createStaticLayout(englishText, testEnglishPaint, contentWidth, Layout.Alignment.ALIGN_NORMAL, 6f * midScale, 1.3f)
+            val testTotal = fixedOverhead + testUrduLayout.height + testEnglishLayout.height + (160f * midScale)
+
+            if (testTotal > targetHeight - 140f) {
+                // Too large, scale down
+                highScale = midScale
+            } else if (testTotal < targetHeight - 480f) {
+                // Too small, scale up to utilize empty space
+                lowScale = midScale
+            } else {
+                bestScale = midScale
+                break
+            }
+            bestScale = midScale
         }
 
-        val testArabicLayout = createStaticLayout(hadith.arabicText, testArabicPaint, contentWidth, Layout.Alignment.ALIGN_CENTER, 8f, 1.35f)
-        val testUrduLayout = createStaticLayout(hadith.urduTranslation, testUrduPaint, contentWidth, Layout.Alignment.ALIGN_NORMAL, 6f, 1.3f)
-        val testEnglishLayout = createStaticLayout(hadith.englishTranslation, testEnglishPaint, contentWidth, Layout.Alignment.ALIGN_NORMAL, 6f, 1.25f)
+        bestScale = bestScale.coerceIn(0.68f, 1.50f)
+        bestUrduSize = (48f * bestScale).coerceIn(34f, 72f)
+        bestEnglishSize = (38f * bestScale).coerceIn(26f, 54f)
 
-        val fixedOverheadBase = 520f // Top header, subheader, labels, dividers, and footer
-        val rawContentHeight = fixedOverheadBase + testArabicLayout.height + testUrduLayout.height + testEnglishLayout.height
-
-        // Calculate dynamic scale factor: 1.0f for normal/short Hadiths, scaling down gracefully for long Hadiths
-        val scale = if (rawContentHeight > targetHeight - 120f) {
-            ((targetHeight - 120f) / rawContentHeight).coerceIn(0.72f, 1.0f)
-        } else {
-            1.0f
-        }
-
+        // Create styled paints with the calculated optimal sizes
         val headerPaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
             color = Color.parseColor("#E6B800") // Gold
-            textSize = baseHeaderSize * scale
+            textSize = (baseHeaderSize * bestScale.coerceIn(0.85f, 1.25f))
             typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
             textAlign = Paint.Align.CENTER
         }
 
         val subHeaderPaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
-            color = Color.parseColor("#B0BEC5") // Silver-grey
-            textSize = baseSubHeaderSize * scale
+            color = Color.parseColor("#D1D5DB") // Light silver-grey
+            textSize = (baseSubHeaderSize * bestScale.coerceIn(0.85f, 1.2f))
             typeface = Typeface.create(Typeface.DEFAULT, Typeface.NORMAL)
             textAlign = Paint.Align.CENTER
         }
 
-        val arabicPaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
-            color = Color.parseColor("#FFFFFF") // Crisp White
-            textSize = baseArabicSize * scale
+        val urduPaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = Color.parseColor("#E8F5E9") // Soft luminous Islamic emerald-white
+            textSize = bestUrduSize
             typeface = Typeface.create(Typeface.SERIF, Typeface.BOLD)
         }
 
-        val urduPaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
-            color = Color.parseColor("#D4EDDA") // Soft islamic green-white
-            textSize = baseUrduSize * scale
-            typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
-        }
-
         val englishPaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
-            color = Color.parseColor("#F8F9FA")
-            textSize = baseEnglishSize * scale
+            color = Color.parseColor("#F3F4F6") // Crisp soft white
+            textSize = bestEnglishSize
             typeface = Typeface.create(Typeface.DEFAULT, Typeface.NORMAL)
         }
 
-        val labelPaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
+        val urduLabelPaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = Color.parseColor("#E6B800") // Gold label
+            textSize = (baseLabelSize * bestScale.coerceIn(0.9f, 1.25f))
+            typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
+        }
+
+        val englishLabelPaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
             color = Color.parseColor("#E6B800")
-            textSize = baseLabelSize * scale
+            textSize = (baseLabelSize * 0.95f * bestScale.coerceIn(0.9f, 1.25f))
             typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
         }
 
         val footerOrgPaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
             color = Color.parseColor("#D4AF37")
-            textSize = baseFooterOrgSize * scale
+            textSize = (baseFooterOrgSize * bestScale.coerceIn(0.85f, 1.2f))
             typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
             textAlign = Paint.Align.CENTER
         }
 
         val footerContactPaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
             color = Color.parseColor("#E2D39A")
-            textSize = baseFooterContactSize * scale
+            textSize = (baseFooterContactSize * bestScale.coerceIn(0.85f, 1.15f))
             typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
             textAlign = Paint.Align.CENTER
         }
 
-        // Layouts with final scaled paints
-        val arabicLayout = createStaticLayout(hadith.arabicText, arabicPaint, contentWidth, Layout.Alignment.ALIGN_CENTER, 8f * scale, 1.35f)
-        val urduLayout = createStaticLayout(hadith.urduTranslation, urduPaint, contentWidth, Layout.Alignment.ALIGN_NORMAL, 6f * scale, 1.3f)
-        val englishLayout = createStaticLayout(hadith.englishTranslation, englishPaint, contentWidth, Layout.Alignment.ALIGN_NORMAL, 6f * scale, 1.25f)
+        // Final text layouts
+        val urduLayout = createStaticLayout(
+            urduText,
+            urduPaint,
+            contentWidth,
+            Layout.Alignment.ALIGN_NORMAL,
+            8f * bestScale,
+            1.35f
+        )
 
-        // Calculate heights & distribute vertical space evenly across the 9:16 frame
-        val headerAreaHeight = 170f * scale
-        val labelAreaHeight = (42f * scale) * 2
-        val footerAreaHeight = 150f * scale
-        val totalTextHeight = arabicLayout.height + urduLayout.height + englishLayout.height
-        val minRequiredHeight = headerAreaHeight + labelAreaHeight + footerAreaHeight + totalTextHeight + 200f
+        val englishLayout = createStaticLayout(
+            englishText,
+            englishPaint,
+            contentWidth,
+            Layout.Alignment.ALIGN_NORMAL,
+            6f * bestScale,
+            1.30f
+        )
 
-        // Ensure canvas is at least 1920 (9:16), or expand if an enormous Hadith exceeds even with scaling
+        // Compute vertical layout distribution
+        val headerAreaHeight = 190f * bestScale.coerceIn(0.85f, 1.2f)
+        val urduLabelHeight = 50f * bestScale.coerceIn(0.9f, 1.2f)
+        val englishLabelHeight = 50f * bestScale.coerceIn(0.9f, 1.2f)
+        val footerAreaHeight = 150f * bestScale.coerceIn(0.85f, 1.2f)
+        val totalTextHeight = urduLayout.height + englishLayout.height
+        val minRequiredHeight = headerAreaHeight + urduLabelHeight + englishLabelHeight + footerAreaHeight + totalTextHeight + 220f
+
         val totalHeight = maxOf(targetHeight, minRequiredHeight.toInt())
 
-        // Calculate flexible vertical spacing between sections to achieve balanced vertical alignment
-        val remainingVerticalSpace = (totalHeight - (headerAreaHeight + labelAreaHeight + footerAreaHeight + totalTextHeight)).coerceAtLeast(100f)
-        val sectionGap = (remainingVerticalSpace / 6f).coerceIn(24f, 65f)
-        val topMargin = ((remainingVerticalSpace - (sectionGap * 4f)) / 2f).coerceIn(40f, 90f)
+        // Calculate flexible vertical gaps to utilize empty space proportionally
+        val remainingSpace = (totalHeight - (headerAreaHeight + urduLabelHeight + englishLabelHeight + footerAreaHeight + totalTextHeight)).coerceAtLeast(120f)
+        val sectionGap = (remainingSpace / 5f).coerceIn(32f, 110f)
+        val topMargin = ((remainingSpace - (sectionGap * 3.5f)) / 2f).coerceIn(50f, 140f)
 
         val bitmap = Bitmap.createBitmap(width, totalHeight, Bitmap.Config.ARGB_8888)
         val canvas = Canvas(bitmap)
 
-        // 1. Draw Dark Islamic Emerald Background
+        // 1. Draw Islamic Deep Emerald Gradient-style Background
         val bgPaint = Paint().apply {
             color = Color.parseColor("#062319") // Deep Emerald
             style = Paint.Style.FILL
         }
         canvas.drawRect(0f, 0f, width.toFloat(), totalHeight.toFloat(), bgPaint)
 
-        // 2. Decode Logo and Draw Light Watermark in Center of the 9:16 Background
+        // 2. Decode Logo and Draw Light Watermark in Center of 9:16 Canvas
         val logoRaw = getLogoBitmap(context)
         if (logoRaw != null) {
             val transparentLogo = createWatermarkBitmap(logoRaw)
-            val watermarkSize = (width * 0.72f).toInt()
+            val watermarkSize = (width * 0.76f).toInt()
             val wmLeft = (width - watermarkSize) / 2f
             val wmTop = (totalHeight - watermarkSize) / 2f
             val destRect = RectF(wmLeft, wmTop, wmLeft + watermarkSize, wmTop + watermarkSize)
 
             val watermarkPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
                 isFilterBitmap = true
-                alpha = 18 // ~7% opacity: very light and subtle, maintains high text legibility
+                alpha = 20 // ~8% opacity for subtle, elegant branding behind text
             }
             canvas.drawBitmap(transparentLogo, null, destRect, watermarkPaint)
         }
 
-        // 3. Draw Decorative Outer Gold Border (9:16 full-bleed rounded frame)
+        // 3. Outer Decorative Gold Border (9:16 rounded frame)
         val borderPaint = Paint().apply {
-            color = Color.parseColor("#D4AF37") // Royal Gold border
+            color = Color.parseColor("#D4AF37") // Royal Gold
             style = Paint.Style.STROKE
             strokeWidth = 6f
         }
         canvas.drawRoundRect(28f, 28f, (width - 28).toFloat(), (totalHeight - 28).toFloat(), 36f, 36f, borderPaint)
 
-        // 4. Inner subtle border
+        // 4. Inner Subtle Emerald Border
         val innerBorderPaint = Paint().apply {
             color = Color.parseColor("#1B4D3E")
             style = Paint.Style.STROKE
@@ -236,31 +285,28 @@ object HadithImageGenerator {
 
         // 5. Draw Circular Alnoor Logo Medallion in Top-Right Corner
         if (logoRaw != null) {
-            val cornerLogoSize = 114f
-            val cornerRight = width - 58f
-            val cornerTop = 54f
+            val cornerLogoSize = 120f
+            val cornerRight = width - 60f
+            val cornerTop = 56f
             val cornerLeft = cornerRight - cornerLogoSize
             val cornerBottom = cornerTop + cornerLogoSize
             val centerX = (cornerLeft + cornerRight) / 2f
             val centerY = (cornerTop + cornerBottom) / 2f
             val radius = cornerLogoSize / 2f
 
-            // White circular medallion base for optimal contrast & clarity on dark emerald background
             val discPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
                 color = Color.WHITE
                 style = Paint.Style.FILL
             }
             canvas.drawCircle(centerX, centerY, radius, discPaint)
 
-            // Logo image drawn cleanly inside the circular medallion
-            val logoInset = 5f
+            val logoInset = 6f
             val logoRect = RectF(cornerLeft + logoInset, cornerTop + logoInset, cornerRight - logoInset, cornerBottom - logoInset)
             val logoPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
                 isFilterBitmap = true
             }
             canvas.drawBitmap(logoRaw, null, logoRect, logoPaint)
 
-            // Outer gold rim around the medallion
             val rimPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
                 color = Color.parseColor("#D4AF37")
                 style = Paint.Style.STROKE
@@ -271,16 +317,16 @@ object HadithImageGenerator {
 
         var currentY = topMargin + 30f
 
-        // Draw Top App Branding
-        canvas.drawText("AL NOOR ISLAMI • DAILY HADITH", width / 2f, currentY + 32f, headerPaint)
-        currentY += 66f * scale
+        // Header: App Title
+        canvas.drawText("AL NOOR ISLAMI • DAILY HADITH", width / 2f, currentY + 34f, headerPaint)
+        currentY += 72f * bestScale.coerceIn(0.9f, 1.2f)
 
-        // Draw Book & Reference
+        // Subheader: Book Name & Hadith Reference
         val refText = "${hadith.book} • Hadith #${hadith.hadithNumber} (${hadith.grade})"
         canvas.drawText(refText, width / 2f, currentY + 24f, subHeaderPaint)
-        currentY += 56f * scale
+        currentY += 60f * bestScale.coerceIn(0.9f, 1.2f)
 
-        // Draw Gold Separator Line
+        // Gold ornamental divider line
         val linePaint = Paint().apply {
             color = Color.parseColor("#D4AF37")
             strokeWidth = 3.5f
@@ -288,41 +334,30 @@ object HadithImageGenerator {
         canvas.drawLine(width / 3.5f, currentY, width * 2.5f / 3.5f, currentY, linePaint)
         currentY += sectionGap
 
-        // Draw Arabic Text
-        canvas.save()
-        canvas.translate(horizontalPadding.toFloat(), currentY)
-        arabicLayout.draw(canvas)
-        canvas.restore()
-        currentY += arabicLayout.height + sectionGap
+        // Urdu Translation Label
+        canvas.drawText("اردو ترجمہ و مفہوم (Urdu Translation):", horizontalPadding.toFloat(), currentY, urduLabelPaint)
+        currentY += 46f * bestScale.coerceIn(0.9f, 1.2f)
 
-        // Subtle Divider Line
-        val subtleLinePaint = Paint().apply {
-            color = Color.parseColor("#1B4D3E")
-            strokeWidth = 2.5f
-        }
-        canvas.drawLine(horizontalPadding.toFloat(), currentY, (width - horizontalPadding).toFloat(), currentY, subtleLinePaint)
-        currentY += (sectionGap * 0.75f)
-
-        // Urdu Translation Header
-        canvas.drawText("اردو ترجمہ (Urdu Translation):", horizontalPadding.toFloat(), currentY, labelPaint)
-        currentY += 40f * scale
-
-        // Urdu Text
+        // Urdu Translation Text Block
         canvas.save()
         canvas.translate(horizontalPadding.toFloat(), currentY)
         urduLayout.draw(canvas)
         canvas.restore()
         currentY += urduLayout.height + sectionGap
 
-        // Subtle Divider Line
+        // Elegant Divider Line between Urdu and English
+        val subtleLinePaint = Paint().apply {
+            color = Color.parseColor("#1B4D3E")
+            strokeWidth = 2.5f
+        }
         canvas.drawLine(horizontalPadding.toFloat(), currentY, (width - horizontalPadding).toFloat(), currentY, subtleLinePaint)
-        currentY += (sectionGap * 0.75f)
+        currentY += (sectionGap * 0.85f)
 
-        // English Translation Header
-        canvas.drawText("English Translation:", horizontalPadding.toFloat(), currentY, labelPaint)
-        currentY += 40f * scale
+        // English Translation Label
+        canvas.drawText("English Translation & Message:", horizontalPadding.toFloat(), currentY, englishLabelPaint)
+        currentY += 44f * bestScale.coerceIn(0.9f, 1.2f)
 
-        // English Text
+        // English Translation Text Block
         canvas.save()
         canvas.translate(horizontalPadding.toFloat(), currentY)
         englishLayout.draw(canvas)
@@ -331,13 +366,13 @@ object HadithImageGenerator {
 
         // Mini gold divider line before footer
         canvas.drawLine(width / 3.2f, currentY, width * 2.2f / 3.2f, currentY, linePaint)
-        currentY += 42f * scale
+        currentY += 46f * bestScale.coerceIn(0.9f, 1.2f)
 
-        // Footer App Stamp: Organization Name
+        // Footer: Organization Name
         canvas.drawText("Alnoor International Trust", width / 2f, currentY, footerOrgPaint)
-        currentY += 40f * scale
+        currentY += 42f * bestScale.coerceIn(0.9f, 1.2f)
 
-        // Footer App Stamp: WhatsApp & Email
+        // Footer: WhatsApp & Email Contact
         canvas.drawText("WhatsApp: +92-333-2434114   •   Email: info@alnoorislami.pk", width / 2f, currentY, footerContactPaint)
 
         return bitmap
@@ -368,7 +403,6 @@ object HadithImageGenerator {
             val r = Color.red(color)
             val g = Color.green(color)
             val b = Color.blue(color)
-            // If pixel is pure white or near-white background, make transparent
             if (r > 240 && g > 240 && b > 240) {
                 pixels[i] = 0
             } else if (a > 0) {
@@ -385,7 +419,7 @@ object HadithImageGenerator {
         width: Int,
         align: Layout.Alignment,
         lineSpacingAdd: Float = 6f,
-        lineSpacingMult: Float = 1.25f
+        lineSpacingMult: Float = 1.3f
     ): StaticLayout {
         return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
             StaticLayout.Builder.obtain(text, 0, text.length, paint, width)
