@@ -47,6 +47,9 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.material.icons.filled.LibraryBooks
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -105,6 +108,9 @@ fun DailyHadithCard(
     var isSavingImage by remember { mutableStateOf(false) }
     var isSharingImage by remember { mutableStateOf(false) }
     var isFetchingAnother by remember { mutableStateOf(false) }
+    var showBooksManager by remember { mutableStateOf(false) }
+    var showSearchDialog by remember { mutableStateOf(false) }
+    var selectedBookFilter by remember { mutableStateOf<String?>("all") }
     var saveSuccessMessage by remember { mutableStateOf<String?>(null) }
     var activeTab by remember { mutableIntStateOf(0) } // 0 = Both, 1 = Urdu, 2 = English
 
@@ -361,10 +367,12 @@ fun DailyHadithCard(
                                     onClick = {
                                         scope.launch {
                                             isFetchingAnother = true
-                                            val next = HadithRepository.fetchAnotherHadith(hadith?.id)
+                                            val next = HadithRepository.fetchAnotherHadith(
+                                                context = context,
+                                                currentId = hadith?.id,
+                                                filterBookKey = if (selectedBookFilter != "all") selectedBookFilter else null
+                                            )
                                             hadith = next
-                                            val idx = HadithRepository.getAllAvailableHadiths().indexOfFirst { it.id == next.id }
-                                            if (idx >= 0) hadithIndex = idx
                                             isFetchingAnother = false
                                         }
                                     },
@@ -513,6 +521,116 @@ fun DailyHadithCard(
                         }
 
                         Spacer(modifier = Modifier.height(12.dp))
+
+                        // Book Filter & Offline Tools Row
+                        LazyRow(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(6.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            item {
+                                Surface(
+                                    shape = RoundedCornerShape(14.dp),
+                                    color = if (selectedBookFilter == "all") Gold500 else Color.White.copy(alpha = 0.08f),
+                                    border = BorderStroke(0.5.dp, if (selectedBookFilter == "all") Gold500 else Color.White.copy(alpha = 0.15f)),
+                                    modifier = Modifier.clickable { selectedBookFilter = "all" }
+                                ) {
+                                    Text(
+                                        text = "All Books",
+                                        color = if (selectedBookFilter == "all") Color.Black else Color.White.copy(alpha = 0.85f),
+                                        fontSize = 11.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp)
+                                    )
+                                }
+                            }
+
+                            item {
+                                Surface(
+                                    shape = RoundedCornerShape(14.dp),
+                                    color = if (selectedBookFilter == "bukhari") Gold500 else Color.White.copy(alpha = 0.08f),
+                                    border = BorderStroke(0.5.dp, if (selectedBookFilter == "bukhari") Gold500 else Color.White.copy(alpha = 0.15f)),
+                                    modifier = Modifier.clickable {
+                                        selectedBookFilter = "bukhari"
+                                        scope.launch {
+                                            isFetchingAnother = true
+                                            hadith = HadithRepository.fetchAnotherHadith(context, hadith?.id, "bukhari")
+                                            isFetchingAnother = false
+                                        }
+                                    }
+                                ) {
+                                    Text(
+                                        text = "Bukhari (~7.5k)",
+                                        color = if (selectedBookFilter == "bukhari") Color.Black else Color.White.copy(alpha = 0.85f),
+                                        fontSize = 11.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp)
+                                    )
+                                }
+                            }
+
+                            item {
+                                Surface(
+                                    shape = RoundedCornerShape(14.dp),
+                                    color = if (selectedBookFilter == "muslim") Gold500 else Color.White.copy(alpha = 0.08f),
+                                    border = BorderStroke(0.5.dp, if (selectedBookFilter == "muslim") Gold500 else Color.White.copy(alpha = 0.15f)),
+                                    modifier = Modifier.clickable {
+                                        selectedBookFilter = "muslim"
+                                        scope.launch {
+                                            isFetchingAnother = true
+                                            hadith = HadithRepository.fetchAnotherHadith(context, hadith?.id, "muslim")
+                                            isFetchingAnother = false
+                                        }
+                                    }
+                                ) {
+                                    Text(
+                                        text = "Muslim (~7.5k)",
+                                        color = if (selectedBookFilter == "muslim") Color.Black else Color.White.copy(alpha = 0.85f),
+                                        fontSize = 11.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp)
+                                    )
+                                }
+                            }
+
+                            item {
+                                Surface(
+                                    shape = RoundedCornerShape(14.dp),
+                                    color = Color(0xFF0F3E2E),
+                                    border = BorderStroke(0.8.dp, Gold400),
+                                    modifier = Modifier.clickable { showSearchDialog = true }
+                                ) {
+                                    Row(
+                                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Icon(imageVector = Icons.Default.Search, contentDescription = "Search", tint = Gold300, modifier = Modifier.size(13.dp))
+                                        Spacer(modifier = Modifier.width(4.dp))
+                                        Text(text = "Search", color = Gold300, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                    }
+                                }
+                            }
+
+                            item {
+                                Surface(
+                                    shape = RoundedCornerShape(14.dp),
+                                    color = Color(0xFF10B981).copy(alpha = 0.2f),
+                                    border = BorderStroke(0.8.dp, Color(0xFF34D399)),
+                                    modifier = Modifier.clickable { showBooksManager = true }
+                                ) {
+                                    Row(
+                                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Icon(imageVector = Icons.Default.LibraryBooks, contentDescription = "Library", tint = Color(0xFF34D399), modifier = Modifier.size(13.dp))
+                                        Spacer(modifier = Modifier.width(4.dp))
+                                        Text(text = "Offline Books 📚", color = Color(0xFF34D399), fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                    }
+                                }
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.height(10.dp))
 
                         // Translation Tabs Filter: Both / Urdu / English
                         Row(
@@ -730,10 +848,12 @@ fun DailyHadithCard(
                                 onClick = {
                                     scope.launch {
                                         isFetchingAnother = true
-                                        val next = HadithRepository.fetchAnotherHadith(hadith?.id)
+                                        val next = HadithRepository.fetchAnotherHadith(
+                                            context = context,
+                                            currentId = hadith?.id,
+                                            filterBookKey = if (selectedBookFilter != "all") selectedBookFilter else null
+                                        )
                                         hadith = next
-                                        val idx = HadithRepository.getAllAvailableHadiths().indexOfFirst { it.id == next.id }
-                                        if (idx >= 0) hadithIndex = idx
                                         isFetchingAnother = false
                                     }
                                 },
@@ -786,6 +906,22 @@ fun DailyHadithCard(
                 }
             }
         }
+    }
+
+    // Offline Hadith Books Manager Dialog
+    if (showBooksManager) {
+        HadithBooksManagerDialog(onDismiss = { showBooksManager = false })
+    }
+
+    // Search Hadith Dialog
+    if (showSearchDialog) {
+        HadithSearchDialog(
+            onDismiss = { showSearchDialog = false },
+            onSelectHadith = { selected ->
+                hadith = selected
+                isExpanded = true
+            }
+        )
     }
 }
 
