@@ -58,6 +58,38 @@ class HadithRepositoryTest {
     }
 
     @Test
+    fun testOfflineDatabaseExtractionAndQuery() = runBlocking {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        val total = HadithRepository.getOfflineTotalCount(context)
+        println("TEST: Total offline hadith count = $total")
+        assertTrue("Offline database must have over 15,000 hadiths (found: $total)", total > 15000)
+
+        // Test Bukhari selection and uniqueness
+        val bukhariSeen = mutableSetOf<String>()
+        var lastBukhariId: String? = null
+        for (i in 1..5) {
+            val h = HadithRepository.fetchAnotherHadith(context, lastBukhariId, "bukhari")
+            println("TEST: Bukhari #$i = ${h.book}, #${h.hadithNumber} (id=${h.id})")
+            assertEquals("Sahih al-Bukhari", h.book)
+            assertFalse("Hadith should not repeat in consecutive requests: ${h.id}", bukhariSeen.contains(h.id))
+            bukhariSeen.add(h.id)
+            lastBukhariId = h.id
+        }
+
+        // Test Muslim selection and uniqueness
+        val muslimSeen = mutableSetOf<String>()
+        var lastMuslimId: String? = null
+        for (i in 1..5) {
+            val h = HadithRepository.fetchAnotherHadith(context, lastMuslimId, "muslim")
+            println("TEST: Muslim #$i = ${h.book}, #${h.hadithNumber} (id=${h.id})")
+            assertEquals("Sahih Muslim", h.book)
+            assertFalse("Hadith should not repeat in consecutive requests: ${h.id}", muslimSeen.contains(h.id))
+            muslimSeen.add(h.id)
+            lastMuslimId = h.id
+        }
+    }
+
+    @Test
     fun testHadithImageGenerationWithWatermarkAndContacts() = runBlocking {
         val context = ApplicationProvider.getApplicationContext<Context>()
         val hadith = HadithRepository.getHadithByIndex(0)

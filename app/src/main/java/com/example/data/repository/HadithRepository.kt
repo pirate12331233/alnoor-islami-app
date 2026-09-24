@@ -147,6 +147,26 @@ object HadithRepository {
         )
     )
 
+    private val recentlyViewedIds = ArrayDeque<String>(60)
+    private val viewedLock = Any()
+
+    fun recordViewedHadith(id: String) {
+        if (id.isBlank()) return
+        synchronized(viewedLock) {
+            recentlyViewedIds.remove(id)
+            if (recentlyViewedIds.size >= 50) {
+                recentlyViewedIds.removeFirst()
+            }
+            recentlyViewedIds.addLast(id)
+        }
+    }
+
+    fun getRecentlyViewedIds(): List<String> {
+        synchronized(viewedLock) {
+            return recentlyViewedIds.toList()
+        }
+    }
+
     fun getTotalHadithCount(): Int = CURATED_SUNNI_AHADITH.size
 
     fun getHadithByIndex(index: Int): HadithData {
@@ -164,25 +184,33 @@ object HadithRepository {
     suspend fun getDailyHadith(context: Context? = null): HadithData = withContext(Dispatchers.IO) {
         val cal = Calendar.getInstance()
         val dayOfYear = cal.get(Calendar.DAY_OF_YEAR)
-        val defaultHadith = CURATED_SUNNI_AHADITH[dayOfYear % CURATED_SUNNI_AHADITH.size]
 
-        if (context == null) return@withContext defaultHadith
-
-        try {
-            val dao = HadithDatabase.getInstance(context).hadithDao()
-            // Deterministic hadith number for the day from Sahih al-Bukhari
-            val targetNum = ((dayOfYear * 17) % 7580 + 1).toString()
-            val offlineHadith = dao.getHadithByBookAndNumber("bukhari", targetNum)
-                ?: dao.getRandomHadith()
-            offlineHadith?.toHadithData() ?: defaultHadith
-        } catch (e: Exception) {
-            Log.w(TAG, "Database access note: ${e.message}")
-            defaultHadith
+        if (context != null) {
+            try {
+                val dao = HadithDatabase.getInstance(context).hadithDao()
+                // Deterministic hadith number for the day from Sahih al-Bukhari
+                val targetNum = ((dayOfYear * 17) % 7580 + 1).toString()
+                val offlineHadith = dao.getHadithByBookAndNumber("bukhari", targetNum)
+                    ?: dao.getRandomHadithByBookExcluding("bukhari", "")
+                    ?: dao.getRandomHadith()
+                if (offlineHadith != null) {
+                    val data = offlineHadith.toHadithData()
+                    recordViewedHadith(data.id)
+                    return@withContext data
+                }
+            } catch (e: Exception) {
+                Log.w(TAG, "Database access note for daily hadith: ${e.message}")
+            }
         }
+
+        val defaultHadith = CURATED_SUNNI_AHADITH[dayOfYear % CURATED_SUNNI_AHADITH.size]
+        recordViewedHadith(defaultHadith.id)
+        defaultHadith
     }
 
     /**
      * Instantly fetches a fresh Hadith from the 15,000+ bundled/downloaded Hadiths in the local SQLite database.
+     * Ensures Hadiths do not repeat and strictly belong to the chosen book.
      * 100% offline, zero internet required.
      */
     suspend fun fetchAnotherHadith(
@@ -190,30 +218,79 @@ object HadithRepository {
         currentId: String? = null,
         filterBookKey: String? = null
     ): HadithData = withContext(Dispatchers.IO) {
-        if (context != null) {
-            try {
-                val dao = HadithDatabase.getInstance(context).hadithDao()
-                val entity: HadithEntity? = if (!filterBookKey.isNullOrBlank() && filterBookKey != "all") {
-                    dao.getRandomHadithByBookExcluding(filterBookKey, currentId ?: "")
-                } else {
-                    dao.getRandomHadithExcluding(currentId ?: "")
-                }
+        val normalizedBookKey = filterBookKey?.trim()?.lowercase()?.let {
+            if (it == "all" || it.isBlank()) null else it
+        }
 
-                if (entity != null) {
-                    return@withContext entity.toHadithData()
-                }
-            } catch (e: Exception) {
-                Log.w(TAG, "Offline fetch fallback: ${e.message}")
+        val excludeIds = ArrayList<String>()
+        if (!currentId.isNullOrBlank()) {
+            excludeIds.add(currentId)
+        }
+        val recent = getRecentlyViewedIds()
+        for (id in recent) {
+            if (!excludeIds.contains(id)) {
+                excludeIds.add(id)
             }
         }
 
-        // Fallback to in-memory curated collection
-        val candidates = CURATED_SUNNI_AHADITH.filter { it.id != currentId }
-        if (candidates.isNotEmpty()) {
-            candidates[Random.nextInt(candidates.size)]
-        } else {
-            CURATED_SUNNI_AHADITH.first()
+        if (context != null) {
+            try {
+                val dao = HadithDatabase.getInstance(context).hadithDao()
+
+                var entity: HadithEntity? = if (normalizedBookKey != null) {
+                    dao.getRandomHadithByBookExcludingList(normalizedBookKey, excludeIds)
+                        ?: dao.getRandomHadithByBookExcluding(normalizedBookKey, currentId ?: "")
+                } else {
+                    dao.getRandomHadithExcludingList(excludeIds)
+                        ?: dao.getRandomHadithExcluding(currentId ?: "")
+                }
+
+                // If all were excluded, clear recent history and retry
+                if (entity == null) {
+                    entity = if (normalizedBookKey != null) {
+                        dao.getRandomHadithByBookExcluding(normalizedBookKey, currentId ?: "")
+                    } else {
+                        dao.getRandomHadith()
+                    }
+                }
+
+                if (entity != null) {
+                    recordViewedHadith(entity.id)
+                    return@withContext entity.toHadithData()
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Offline database query exception: ${e.message}", e)
+            }
         }
+
+        // Strict fallback by selected book if database failed
+        val bookFilteredCurated = if (normalizedBookKey != null) {
+            CURATED_SUNNI_AHADITH.filter { h ->
+                when (normalizedBookKey) {
+                    "bukhari" -> h.book.contains("Bukhari", ignoreCase = true)
+                    "muslim" -> h.book.contains("Muslim", ignoreCase = true)
+                    "tirmidhi" -> h.book.contains("Tirmidhi", ignoreCase = true)
+                    "abudawud" -> h.book.contains("Dawud", ignoreCase = true)
+                    "nasai" -> h.book.contains("Nasa'i", ignoreCase = true) || h.book.contains("Nasai", ignoreCase = true)
+                    "ibnmajah" -> h.book.contains("Majah", ignoreCase = true)
+                    else -> true
+                }
+            }
+        } else {
+            CURATED_SUNNI_AHADITH
+        }
+
+        val pool = if (bookFilteredCurated.isNotEmpty()) bookFilteredCurated else CURATED_SUNNI_AHADITH
+        val unviewed = pool.filter { !excludeIds.contains(it.id) }
+        val chosen = if (unviewed.isNotEmpty()) {
+            unviewed[Random.nextInt(unviewed.size)]
+        } else {
+            val nonCurrent = pool.filter { it.id != currentId }
+            if (nonCurrent.isNotEmpty()) nonCurrent[Random.nextInt(nonCurrent.size)] else pool.first()
+        }
+
+        recordViewedHadith(chosen.id)
+        chosen
     }
 
     /**

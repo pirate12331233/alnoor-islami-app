@@ -533,7 +533,14 @@ fun DailyHadithCard(
                                     shape = RoundedCornerShape(14.dp),
                                     color = if (selectedBookFilter == "all") Gold500 else Color.White.copy(alpha = 0.08f),
                                     border = BorderStroke(0.5.dp, if (selectedBookFilter == "all") Gold500 else Color.White.copy(alpha = 0.15f)),
-                                    modifier = Modifier.clickable { selectedBookFilter = "all" }
+                                    modifier = Modifier.clickable {
+                                        selectedBookFilter = "all"
+                                        scope.launch {
+                                            isFetchingAnother = true
+                                            hadith = HadithRepository.fetchAnotherHadith(context, hadith?.id, null)
+                                            isFetchingAnother = false
+                                        }
+                                    }
                                 ) {
                                     Text(
                                         text = "All Books",

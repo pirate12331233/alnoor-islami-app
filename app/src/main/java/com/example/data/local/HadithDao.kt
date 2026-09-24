@@ -26,6 +26,12 @@ interface HadithDao {
     @Query("SELECT * FROM hadiths WHERE bookKey = :bookKey AND id != :currentId ORDER BY RANDOM() LIMIT 1")
     suspend fun getRandomHadithByBookExcluding(bookKey: String, currentId: String): HadithEntity?
 
+    @Query("SELECT * FROM hadiths WHERE bookKey = :bookKey AND id NOT IN (:excludeIds) ORDER BY RANDOM() LIMIT 1")
+    suspend fun getRandomHadithByBookExcludingList(bookKey: String, excludeIds: List<String>): HadithEntity?
+
+    @Query("SELECT * FROM hadiths WHERE id NOT IN (:excludeIds) ORDER BY RANDOM() LIMIT 1")
+    suspend fun getRandomHadithExcludingList(excludeIds: List<String>): HadithEntity?
+
     @Query("SELECT COUNT(*) FROM hadiths")
     suspend fun getTotalCount(): Int
 

@@ -4,6 +4,9 @@ import android.app.Application
 import android.util.Log
 import com.example.util.AlnoorBackgroundSyncReceiver
 import com.example.util.NotificationHelper
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 
 /**
  * Custom Application class for Alnoor Islamic App.
@@ -22,6 +25,15 @@ class AlnoorApp : Application() {
 
         // 2. Start high-reliability background sync alarm (operates independently of Google Play Services)
         AlnoorBackgroundSyncReceiver.schedule(this)
+
+        // 3. Asynchronously ensure the 15,000+ Sahihain Hadith database is unpacked to local storage
+        kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
+            try {
+                com.example.data.local.HadithDatabaseManager.ensureDatabaseExtracted(this@AlnoorApp)
+            } catch (e: Exception) {
+                Log.w(TAG, "Early Hadith database extraction note: ${e.message}")
+            }
+        }
     }
 
     companion object {
